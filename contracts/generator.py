@@ -270,14 +270,12 @@ def dominant_character_pattern(series: pd.Series) -> str | None:
 
 
 def numeric_stats(series: pd.Series) -> dict[str, float] | None:
-    """Safely compute numeric stats without relying on pandas.to_numeric on object-heavy data.
-
-    This avoids native crashes that can occur in some pandas/numpy builds when coercing
-    large object arrays with mixed values.
-    """
+    """Safely compute numeric stats without relying on pandas.to_numeric on object-heavy data."""
     values: list[float] = []
 
-    for value in series.dropna().tolist():
+    non_null_values = series.dropna().tolist()
+
+    for value in non_null_values:
         if isinstance(value, bool):
             continue
         if isinstance(value, (int, float)):
@@ -296,6 +294,10 @@ def numeric_stats(series: pd.Series) -> dict[str, float] | None:
                 values.append(parsed)
 
     if not values:
+        return None
+
+    numeric_ratio = len(values) / max(len(non_null_values), 1)
+    if numeric_ratio < 0.95:
         return None
 
     clean = pd.Series(values, dtype="float64")
@@ -352,8 +354,11 @@ def infer_clause(profile: ColumnProfile) -> dict[str, Any]:
     desc_parts: list[str] = []
 
     if profile.name.endswith("_id") or profile.name.endswith(".id"):
-        clause["format"] = "uuid"
-        desc_parts.append("Identifier field; expected UUID-like values.")
+        if looks_like_uuid_samples(profile.sample_values):
+            clause["format"] = "uuid"
+            desc_parts.append("Identifier field; UUID format verified from observed values.")
+        else:
+            desc_parts.append("Identifier field; observed values are not UUID-formatted.")
 
     if profile.name.endswith("_at") or profile.name.endswith("_time") or profile.name in {"start_time", "end_time"}:
         if looks_like_datetime(profile.sample_values):
@@ -399,7 +404,10 @@ def infer_clause(profile: ColumnProfile) -> dict[str, Any]:
 
 
 def infer_type(profile: ColumnProfile) -> str:
-    if profile.stats is not None:
+    # Conservative numeric inference:
+    # only treat a column as numeric if the vast majority of sampled values
+    # are genuinely numeric.
+    if profile.stats is not None and column_is_mostly_numeric(profile):
         if looks_integer_like(profile):
             return "integer"
         return "number"
@@ -411,6 +419,41 @@ def infer_type(profile: ColumnProfile) -> str:
         return "string"
     return "string"
 
+def value_looks_numeric(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return math.isfinite(float(value))
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return False
+        try:
+            parsed = float(text)
+        except ValueError:
+            return False
+        return math.isfinite(parsed)
+    return False
+
+
+def column_is_mostly_numeric(profile: ColumnProfile) -> bool:
+    # Use sample values as a safety gate. This prevents free-text columns
+    # from being mislabeled as numeric just because profiling found some path.
+    samples = profile.sample_values
+    if not samples:
+        return False
+
+    numeric_like = sum(1 for v in samples if value_looks_numeric(v))
+    ratio = numeric_like / max(len(samples), 1)
+
+    # Require all or almost all sampled values to be numeric.
+    return ratio >= 0.95
+
+
+def looks_like_uuid_samples(samples: list[str]) -> bool:
+    if not samples:
+        return False
+    return all(bool(UUID_RE.match(s.strip())) for s in samples[:5])
 
 def looks_integer_like(profile: ColumnProfile) -> bool:
     stats = profile.stats
