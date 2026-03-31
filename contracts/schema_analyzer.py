@@ -103,37 +103,37 @@ def classify_change(field_name: str, old_clause: dict[str, Any] | None, new_clau
     if old_clause is None and new_clause is None:
         return NO_CHANGE, "No material change."
 
-    old_type = old_clause.get("type")
-    new_type = new_clause.get("type")
+    old_type = old_clause.get("type") if isinstance(old_clause, dict) else None
+    new_type = new_clause.get("type") if isinstance(new_clause, dict) else None
     if old_type != new_type:
         return BREAKING, f"Type change {old_type} -> {new_type}. Explicit migration and rollback plan required."
 
-    old_required = bool(old_clause.get("required", False))
-    new_required = bool(new_clause.get("required", False))
+    old_required = bool(old_clause.get("required", False)) if isinstance(old_clause, dict) else False
+    new_required = bool(new_clause.get("required", False)) if isinstance(new_clause, dict) else False
     if old_required != new_required:
         if new_required and not old_required:
             return BREAKING, "Field became required — existing producers may fail or emit nulls."
         return COMPATIBLE, "Field became optional — backward-compatible for existing producers and consumers."
 
-    old_min = old_clause.get("minimum")
-    new_min = new_clause.get("minimum")
-    old_max = old_clause.get("maximum")
-    new_max = new_clause.get("maximum")
+    old_min = old_clause.get("minimum") if isinstance(old_clause, dict) else None
+    new_min = new_clause.get("minimum") if isinstance(new_clause, dict) else None
+    old_max = old_clause.get("maximum") if isinstance(old_clause, dict) else None
+    new_max = new_clause.get("maximum") if isinstance(new_clause, dict) else None
     if old_min != new_min or old_max != new_max:
         return BREAKING, f"Range change detected: minimum {old_min} -> {new_min}, maximum {old_max} -> {new_max}."
 
-    old_pattern = old_clause.get("pattern")
-    new_pattern = new_clause.get("pattern")
+    old_pattern = old_clause.get("pattern") if isinstance(old_clause, dict) else None
+    new_pattern = new_clause.get("pattern") if isinstance(new_clause, dict) else None
     if old_pattern != new_pattern:
         return BREAKING, f"Pattern constraint changed: {old_pattern} -> {new_pattern}."
 
-    old_format = old_clause.get("format")
-    new_format = new_clause.get("format")
+    old_format = old_clause.get("format") if isinstance(old_clause, dict) else None
+    new_format = new_clause.get("format") if isinstance(new_clause, dict) else None
     if old_format != new_format:
         return BREAKING, f"Format constraint changed: {old_format} -> {new_format}."
 
-    old_enum = old_clause.get("enum")
-    new_enum = new_clause.get("enum")
+    old_enum = old_clause.get("enum") if isinstance(old_clause, dict) else None
+    new_enum = new_clause.get("enum") if isinstance(new_clause, dict) else None
     if old_enum != new_enum:
         old_set = set(old_enum or [])
         new_set = set(new_enum or [])
@@ -144,8 +144,8 @@ def classify_change(field_name: str, old_clause: dict[str, Any] | None, new_clau
         if added:
             return COMPATIBLE, f"Enum values added: {added}."
 
-    old_desc = old_clause.get("description")
-    new_desc = new_clause.get("description")
+    old_desc = old_clause.get("description") if isinstance(old_clause, dict) else None
+    new_desc = new_clause.get("description") if isinstance(new_clause, dict) else None
     if old_desc != new_desc:
         return COMPATIBLE, "Documentation/description changed without altering the executable contract."
 
@@ -193,7 +193,13 @@ def rollback_plan(contract_id: str, previous_snapshot: Path) -> list[str]:
 
 def contract_downstream(contract_yaml: dict[str, Any]) -> list[str]:
     downstream = contract_yaml.get("lineage", {}).get("downstream", []) or []
-    return [d.get("id") for d in downstream if isinstance(d, dict) and d.get("id")]
+    ids: list[str] = []
+    for d in downstream:
+        if isinstance(d, dict):
+            val = d.get("id")
+            if isinstance(val, str) and val:
+                ids.append(val)
+    return ids
 
 
 def compute_compatibility_verdict(changes: list[dict[str, Any]]) -> str:
