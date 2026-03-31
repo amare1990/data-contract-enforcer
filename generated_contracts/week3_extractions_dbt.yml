@@ -1,0 +1,38 @@
+version: 2
+models:
+- name: extractions
+  description: One record per processed document. Each record contains extracted facts,
+    entity references, processing metadata, and lineage-relevant identifiers.
+  columns:
+  - name: confidence
+    description: Confidence score. Must remain 0.0-1.0 float. Breaking change if converted
+      to 0-100 scale.
+    tests:
+    - not_null
+  - name: content_hash
+    description: Auto-generated column contract.
+    tests:
+    - not_null
+  - name: doc_id
+    description: Identifier field; expected UUID-like values.
+    tests:
+    - not_null
+    - unique
+    - expect_uuid_format: {}
+  - name: ldu_id
+    description: Identifier field; expected UUID-like values.
+    tests:
+    - not_null
+    - expect_uuid_format: {}
+  - name: page_number
+    description: Auto-generated column contract.
+    tests:
+    - not_null
+  - name: source_path
+    description: Auto-generated column contract.
+    tests:
+    - not_null
+  - name: text
+    description: Auto-generated column contract.
+    tests:
+    - not_null

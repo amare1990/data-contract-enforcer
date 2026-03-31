@@ -270,11 +270,36 @@ def dominant_character_pattern(series: pd.Series) -> str | None:
 
 
 def numeric_stats(series: pd.Series) -> dict[str, float] | None:
-    numeric = pd.to_numeric(series, errors="coerce")
-    clean = numeric.dropna()
-    if clean.empty:
+    """Safely compute numeric stats without relying on pandas.to_numeric on object-heavy data.
+
+    This avoids native crashes that can occur in some pandas/numpy builds when coercing
+    large object arrays with mixed values.
+    """
+    values: list[float] = []
+
+    for value in series.dropna().tolist():
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            if math.isfinite(float(value)):
+                values.append(float(value))
+            continue
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                continue
+            try:
+                parsed = float(text)
+            except ValueError:
+                continue
+            if math.isfinite(parsed):
+                values.append(parsed)
+
+    if not values:
         return None
 
+    clean = pd.Series(values, dtype="float64")
+    stddev = clean.std()
     stats = {
         "min": float(clean.min()),
         "max": float(clean.max()),
@@ -284,7 +309,7 @@ def numeric_stats(series: pd.Series) -> dict[str, float] | None:
         "p75": float(clean.quantile(0.75)),
         "p95": float(clean.quantile(0.95)),
         "p99": float(clean.quantile(0.99)),
-        "stddev": float(0.0 if math.isnan(clean.std()) else clean.std()),
+        "stddev": float(0.0 if math.isnan(stddev) else stddev),
     }
     return stats
 
@@ -293,13 +318,15 @@ def build_column_profiles(df: pd.DataFrame) -> dict[str, ColumnProfile]:
     profiles: dict[str, ColumnProfile] = {}
     for col in df.columns:
         series = df[col]
-        sample_values = [safe_string(v) for v in series.dropna().unique()[:5]]
+        non_null = series.dropna().tolist()
+        sample_values = [safe_string(v) for v in non_null[:5]]
+        cardinality_estimate = len({safe_string(v) for v in non_null})
         profile = ColumnProfile(
             name=col,
             path=col,
             dtype=str(series.dtype),
             null_fraction=float(series.isna().mean()),
-            cardinality_estimate=int(series.nunique(dropna=True)),
+            cardinality_estimate=int(cardinality_estimate),
             sample_values=sample_values,
             stats=numeric_stats(series),
             dominant_pattern=dominant_character_pattern(series)
