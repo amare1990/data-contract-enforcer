@@ -1,0 +1,21 @@
+{
+  "run_date": "2026-03-31",
+  "mode": "partial",
+  "embedding_drift": {
+    "status": "PASS",
+    "drift_score": 0.0,
+    "threshold": 0.15,
+    "sample_size": 200,
+    "interpretation": "stable",
+    "backend": "openai"
+  },
+  "prompt_input_validation": {
+    "status": "PASS",
+    "total_records": 8545,
+    "valid": 8545,
+    "quarantined": 0,
+    "quarantine_path": "outputs/quarantine/quarantine.jsonl",
+    "schema": "draft-07"
+  },
+  "output_schema": null
+}

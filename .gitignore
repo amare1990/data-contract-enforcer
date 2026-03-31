@@ -4,3 +4,22 @@ __pycache__/
 .env
 schema_snapshots/*.npz
 outputs/quarantine/
+
+outputs/
+
+scripts/
+
+
+# Leave notes
+notes/
+
+schema_snapshots/
+
+generated_contracts/
+
+enforcer_report/
+
+violation_log/
+
+validation_reports/ai_extensions_embedding.json
+validation_reports/ai_extensions_prompt.json

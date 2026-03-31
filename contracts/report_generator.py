@@ -385,6 +385,26 @@ def main() -> None:
     print(f"[OK] output={output_path}")
     print(f"[OK] data_health_score={report['data_health_score']}")
 
+    # ✅ NEW: AI metrics summary
+    ai = report.get("ai_system_risk_assessment", {})
+    if ai:
+        print(f"[OK] ai_status={ai.get('status')}")
+
+        emb = ai.get("embedding_drift")
+        prompt = ai.get("prompt_input_validation")
+        output_schema = ai.get("output_schema_violation_rate")
+
+        emb_status = emb.get("status") if isinstance(emb, dict) else None
+        prompt_status = prompt.get("status") if isinstance(prompt, dict) else None
+        output_status = output_schema.get("status") if isinstance(output_schema, dict) else None
+
+        print(
+            f"[OK] ai_breakdown="
+            f"embedding={emb_status} "
+            f"prompt={prompt_status} "
+            f"output_schema={output_status}"
+        )
+
 
 if __name__ == "__main__":
     main()

@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import math
+from datetime import datetime, UTC
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -326,7 +327,7 @@ def check_output_schema_violation_rate(
 
 def run_all(args: argparse.Namespace) -> dict[str, Any]:
     output: dict[str, Any] = {
-        "run_date": datetime.utcnow().date().isoformat(),
+        "run_date": datetime.now(UTC).date().isoformat(),
         "mode": args.mode,
     }
 
