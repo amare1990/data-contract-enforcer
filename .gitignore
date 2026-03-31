@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+schema_snapshots/*.npz
+outputs/quarantine/
