@@ -1,0 +1,12 @@
+{
+  "run_date": "2026-04-01",
+  "mode": "prompt",
+  "prompt_input_validation": {
+    "status": "PASS",
+    "total_records": 8545,
+    "valid": 8545,
+    "quarantined": 0,
+    "quarantine_path": "outputs/quarantine/quarantine.jsonl",
+    "schema": "draft-07"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "run_date": "2026-04-01",
+  "mode": "embedding",
+  "embedding_drift": {
+    "status": "PASS",
+    "drift_score": 0.0,
+    "threshold": 0.15,
+    "sample_size": 200,
+    "interpretation": "stable",
+    "backend": "openai"
+  }
+}
