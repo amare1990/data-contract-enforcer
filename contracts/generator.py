@@ -706,23 +706,142 @@ def build_dbt_schema(context: ContractContext, profiles: dict[str, ColumnProfile
     for profile in sorted(profiles.values(), key=lambda p: p.name):
         tests: list[Any] = []
         clause = infer_clause(profile)
+        name = profile.name
 
+        # -------------------------
+        # Not-null propagation
+        # -------------------------
         if clause.get("required"):
             tests.append("not_null")
-        if profile.name == "doc_id":
+
+        # Add stronger defaults for important operational fields
+        important_not_null = {
+            "doc_id",
+            "document_id",
+            "event_id",
+            "event_type",
+            "aggregate_id",
+            "aggregate_type",
+            "sequence_number",
+            "recorded_at",
+            "occurred_at",
+            "trace_id",
+            "snapshot_id",
+        }
+        if name in important_not_null and "not_null" not in tests:
+            tests.append("not_null")
+
+        # -------------------------
+        # Uniqueness propagation
+        # -------------------------
+        unique_candidates = {
+            "doc_id",
+            "document_id",
+            "event_id",
+            "trace_id",
+            "snapshot_id",
+        }
+        if name in unique_candidates:
             tests.append("unique")
-        if "enum" in clause:
+
+        # -------------------------
+        # Enum propagation
+        # -------------------------
+        if "enum" in clause and clause["enum"]:
             tests.append({"accepted_values": {"values": clause["enum"]}})
+
+        # -------------------------
+        # Format propagation
+        # -------------------------
         if clause.get("format") == "uuid":
             tests.append({"expect_uuid_format": {}})
 
-        columns.append(
-            {
-                "name": profile.name,
-                "description": clause.get("description", "Auto-generated column contract."),
-                "tests": tests,
-            }
-        )
+        if clause.get("format") == "date-time":
+            tests.append({"expect_datetime_format": {}})
+
+        # -------------------------
+        # Pattern propagation
+        # -------------------------
+        if "pattern" in clause:
+            tests.append({"expect_column_values_to_match_regex": {"regex": clause["pattern"]}})
+
+        # -------------------------
+        # Numeric bounds propagation
+        # -------------------------
+        if "minimum" in clause:
+            tests.append({"dbt_utils.expression_is_true": {"expression": f"{name} >= {clause['minimum']}"}})
+
+        if "maximum" in clause:
+            tests.append({"dbt_utils.expression_is_true": {"expression": f"{name} <= {clause['maximum']}"}})
+
+        # -------------------------
+        # Week 5 event-specific rules
+        # -------------------------
+        if context.logical_name == "events":
+            if name == "event_type":
+                # PascalCase event names
+                tests.append(
+                    {
+                        "expect_column_values_to_match_regex": {
+                            "regex": PASCAL_CASE_RE.pattern
+                        }
+                    }
+                )
+
+            if name == "aggregate_type":
+                tests.append(
+                    {
+                        "expect_column_values_to_match_regex": {
+                            "regex": PASCAL_CASE_RE.pattern
+                        }
+                    }
+                )
+
+            if name == "sequence_number":
+                tests.append(
+                    {"dbt_utils.expression_is_true": {"expression": "sequence_number >= 1"}}
+                )
+
+            # Optional relationship if your dbt project includes event_streams model
+            if name == "aggregate_id":
+                tests.append(
+                    {
+                        "relationships": {
+                            "to": "ref('event_streams')",
+                            "field": "stream_id",
+                        }
+                    }
+                )
+
+        # -------------------------
+        # Week 3 extraction-specific rules
+        # -------------------------
+        if context.logical_name == "extractions":
+            if name == "confidence":
+                tests.append(
+                    {"dbt_utils.expression_is_true": {"expression": "confidence >= 0.0"}}
+                )
+                tests.append(
+                    {"dbt_utils.expression_is_true": {"expression": "confidence <= 1.0"}}
+                )
+
+        # De-duplicate tests while preserving order
+        deduped_tests: list[Any] = []
+        seen = set()
+        for test in tests:
+            key = json.dumps(test, sort_keys=True) if isinstance(test, dict) else str(test)
+            if key not in seen:
+                seen.add(key)
+                deduped_tests.append(test)
+
+        col_entry = {
+            "name": name,
+            "description": clause.get("description", "Auto-generated column contract."),
+        }
+        if deduped_tests:
+            col_entry["tests"] = deduped_tests
+
+        columns.append(col_entry)
 
     return {
         "version": 2,

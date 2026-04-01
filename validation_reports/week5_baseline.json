@@ -1,10 +1,10 @@
 {
-  "report_id": "f17d5339-93a9-425e-b1cb-e2daa5d9a54f",
+  "report_id": "119259f7-47fa-4a36-a0b4-ce471c35f055",
   "contract_id": "week5-event-platform-events",
   "snapshot_id": "82b62f6e438edbf2af91295dea1d0bcfd94d1da7737b670a7f0d4a352c03dd63",
-  "run_timestamp": "2026-04-01T17:12:58Z",
-  "total_checks": 200,
-  "passed": 21,
+  "run_timestamp": "2026-04-01T20:46:59Z",
+  "total_checks": 198,
+  "passed": 19,
   "failed": 1,
   "warned": 0,
   "errored": 178,
@@ -2352,18 +2352,6 @@
       "message": "All non-null values conform to expected type string."
     },
     {
-      "check_id": "week5-event-platform-events.schema_version.statistical_drift",
-      "column_name": "schema_version",
-      "check_type": "statistical_drift",
-      "status": "PASS",
-      "actual_value": "current_mean=1.0357, z_score=0.00",
-      "expected": "baseline_mean=1.0357, threshold<=2 WARN, <=3 FAIL",
-      "severity": "LOW",
-      "records_failing": 0,
-      "sample_failing": [],
-      "message": "schema_version mean within baseline tolerance (0.0 stddev)"
-    },
-    {
       "check_id": "week5-event-platform-events.sequence_number.required",
       "column_name": "sequence_number",
       "check_type": "required",
@@ -2398,18 +2386,6 @@
       "records_failing": 0,
       "sample_failing": [],
       "message": "Numeric values are within the allowed range."
-    },
-    {
-      "check_id": "week5-event-platform-events.sequence_number.statistical_drift",
-      "column_name": "sequence_number",
-      "check_type": "statistical_drift",
-      "status": "PASS",
-      "actual_value": "current_mean=5.2925, z_score=0.00",
-      "expected": "baseline_mean=5.2935, threshold<=2 WARN, <=3 FAIL",
-      "severity": "LOW",
-      "records_failing": 0,
-      "sample_failing": [],
-      "message": "sequence_number mean within baseline tolerance (0.0 stddev)"
     }
   ]
 }

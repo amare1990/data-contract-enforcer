@@ -12,7 +12,7 @@ This repository implements a contract generation, validation, attribution, and r
 uv run python contracts/generator.py \
   --source outputs/week3/extractions.jsonl \
   --contract-id week3-document-refinery-extractions \
-  --lineage outputs/week4/lineage_snapshots.jsonl \
+  --lineage outputs/week4/lineage_snapshots_week3.jsonl \
   --output generated_contracts/
 ```
 
