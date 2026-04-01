@@ -6,18 +6,29 @@ uv run python contracts/generator.py \
   --contract-id week3-document-refinery-extractions \
   --lineage outputs/week4/lineage_snapshots.jsonl \
   --output generated_contracts/
+
+  # For week5
+
+  uv run python contracts/generator.py \
+  --source outputs/week5/events.jsonl \
+  --contract-id week5-event-platform-events \
+  --lineage outputs/week4/lineage_snapshots_week5.jsonl \
+  --output generated_contracts/
+
 ```
+---
 
 # To run the validation runner-> runner.py
 
 ```bash
 
 uv run python contracts/runner.py \
->   --contract generated_contracts/week3_extractions.yaml \
->   --data outputs/week3/extractions_violated.jsonl \
->   --output validation_reports/violated_run.json
+   --contract generated_contracts/week3_extractions.yaml \
+   --data outputs/week3/extractions_violated.jsonl \
+   --output validation_reports/violated_run.json
 
 ```
+---
 
 # To run the attributer -> attributer.py
 
@@ -28,12 +39,14 @@ uv run python contracts/attributor.py \
   --contract generated_contracts/week3_extractions.yaml \
   --output violation_log/violations.jsonl
 ```
+---
 
 ### Then inspect the result
 
 ```bash
 
 cat violation_log/violations.jsonl
+
 
 # If you want a cleaner look:
 
@@ -49,6 +62,8 @@ grep -A 8 -B 2 '"status": "FAIL"' validation_reports/violated_run.json
 
 ```
 
+---
+
 # To run contracts/schema_analyzer.py
 
 ```bash
@@ -58,6 +73,8 @@ uv run python contracts/schema_analyzer.py \
   --output validation_reports/schema_evolution_week3.json
 
 ```
+
+---
 
 # To run contracts/report_generator.py
 
@@ -80,11 +97,13 @@ uv run python contracts/report_generator.py \
 
 ```
 
+---
+
 # To run contracts/ai_extensions.py
 
 ```bash
 
-#Mode = embedding
+# Mode = embedding
 
 uv run python contracts/ai_extensions.py \
   --mode embedding \
@@ -107,3 +126,31 @@ uv run python contracts/ai_extensions.py \
 
 ```
 
+---
+
+
+# For week5
+
+## 1. Create the baseline run (no changes to data)
+
+```bash
+
+uv run python contracts/runner.py \
+  --contract generated_contracts/week5_event_platform_events.yaml \
+  --data outputs/week5/events.jsonl \
+  --output validation_reports/week5_baseline.json
+
+```
+
+---
+
+## 3. Run violated validation
+
+```bash
+
+uv run python contracts/runner.py \
+  --contract generated_contracts/week5_event_platform_events.yaml \
+  --data outputs/week5/events_violated.jsonl \
+  --output validation_reports/week5_violated.json
+
+```

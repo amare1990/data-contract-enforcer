@@ -1,11 +1,11 @@
 {
-  "report_id": "eb7afabd-986a-465b-baf6-c47a5c6576e6",
+  "report_id": "016125e8-4898-47df-8881-44af1bbecdbf",
   "contract_id": "week3-document-refinery-extractions",
   "snapshot_id": "9538a3e0b59bd8a84f95270a0b0ff5095ef19a051413350e7edeb4c795bcbddc",
-  "run_timestamp": "2026-03-31T12:24:18Z",
+  "run_timestamp": "2026-04-01T12:27:36Z",
   "total_checks": 18,
-  "passed": 16,
-  "failed": 2,
+  "passed": 17,
+  "failed": 1,
   "warned": 0,
   "errored": 0,
   "results": [
@@ -55,13 +55,13 @@
       "check_id": "week3-document-refinery-extractions.confidence.statistical_drift",
       "column_name": "confidence",
       "check_type": "statistical_drift",
-      "status": "FAIL",
-      "actual_value": "current_mean=8511.4102, z_score=1139762.06",
-      "expected": "baseline_mean=0.8511, threshold<=2 WARN, <=3 FAIL",
-      "severity": "HIGH",
+      "status": "PASS",
+      "actual_value": "current_mean=8511.4102, z_score=0.00",
+      "expected": "baseline_mean=8511.4102, threshold<=2 WARN, <=3 FAIL",
+      "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "confidence mean drifted 1139762.1 stddev from baseline"
+      "message": "confidence mean within baseline tolerance (0.0 stddev)"
     },
     {
       "check_id": "week3-document-refinery-extractions.content_hash.required",

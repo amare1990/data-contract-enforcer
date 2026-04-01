@@ -2,8 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 .env
-schema_snapshots/*.npz
-outputs/quarantine/
 
 outputs/
 
@@ -13,13 +11,8 @@ scripts/
 # Leave notes
 notes/
 
-schema_snapshots/
 
-generated_contracts/
+node_modules/
 
-enforcer_report/
 
-violation_log/
 
-validation_reports/ai_extensions_embedding.json
-validation_reports/ai_extensions_prompt.json
