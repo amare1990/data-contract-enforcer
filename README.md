@@ -1,4 +1,12 @@
-# Run generator
+# Data Contract Enforcer — Usage Guide
+
+This repository implements a contract generation, validation, attribution, and reporting pipeline.
+
+---
+
+# 1. Contract Generation
+
+## Week 3 — Document Refinery
 
 ```bash
 uv run python contracts/generator.py \
@@ -6,31 +14,58 @@ uv run python contracts/generator.py \
   --contract-id week3-document-refinery-extractions \
   --lineage outputs/week4/lineage_snapshots.jsonl \
   --output generated_contracts/
+```
 
-  # For week5
+---
 
-  uv run python contracts/generator.py \
+## Week 5 — Event Platform
+
+```bash
+uv run python contracts/generator.py \
   --source outputs/week5/events.jsonl \
   --contract-id week5-event-platform-events \
   --lineage outputs/week4/lineage_snapshots_week5.jsonl \
   --output generated_contracts/
-
 ```
+
 ---
 
-# To run the validation runner-> runner.py
+# 2. Validation Runner
+
+## Week 3 (violated example)
 
 ```bash
-
 uv run python contracts/runner.py \
-   --contract generated_contracts/week3_extractions.yaml \
-   --data outputs/week3/extractions_violated.jsonl \
-   --output validation_reports/violated_run.json
-
+  --contract generated_contracts/week3_extractions.yaml \
+  --data outputs/week3/extractions_violated.jsonl \
+  --output validation_reports/violated_run.json
 ```
+
 ---
 
-# To run the attributer -> attributer.py
+## Week 5
+
+### Baseline
+
+```bash
+uv run python contracts/runner.py \
+  --contract generated_contracts/week5_event_platform_events.yaml \
+  --data outputs/week5/events.jsonl \
+  --output validation_reports/week5_baseline.json
+```
+
+### Violated
+
+```bash
+uv run python contracts/runner.py \
+  --contract generated_contracts/week5_event_platform_events.yaml \
+  --data outputs/week5/events_violated.jsonl \
+  --output validation_reports/week5_violated.json
+```
+
+---
+
+# 3. Violation Attribution
 
 ```bash
 uv run python contracts/attributor.py \
@@ -39,118 +74,100 @@ uv run python contracts/attributor.py \
   --contract generated_contracts/week3_extractions.yaml \
   --output violation_log/violations.jsonl
 ```
----
-
-### Then inspect the result
-
-```bash
-
-cat violation_log/violations.jsonl
-
-
-# If you want a cleaner look:
-
-python -m json.tool < violation_log/violations.jsonl
-
-# That last command may complain because JSONL is multiple JSON objects, so the safer version is:
-
-while read -r line; do echo "$line" | python -m json.tool; done < violation_log/violations.jsonl
-
-# Useful sanity check
-
-grep -A 8 -B 2 '"status": "FAIL"' validation_reports/violated_run.json
-
-```
 
 ---
 
-# To run contracts/schema_analyzer.py
+# 4. Schema Evolution Analysis
 
 ```bash
-
 uv run python contracts/schema_analyzer.py \
   --contract-id week3-document-refinery-extractions \
   --output validation_reports/schema_evolution_week3.json
-
 ```
 
 ---
 
-# To run contracts/report_generator.py
+# 5. AI Contract Extensions
+
+## Embedding drift
 
 ```bash
-
-uv run python contracts/report_generator.py \
-  --reports-dir validation_reports \
-  --violations violation_log/violations.jsonl \
-  --schema-evolution validation_reports/schema_evolution_week3.json \
-  --output enforcer_report/report_data.json
-
-  # If you later add AI metrics:
-
-  uv run python contracts/report_generator.py \
-  --reports-dir validation_reports \
-  --violations violation_log/violations.jsonl \
-  --schema-evolution validation_reports/schema_evolution_week3.json \
-  --ai-metrics validation_reports/ai_extensions.json \
-  --output enforcer_report/report_data.json
-
-```
-
----
-
-# To run contracts/ai_extensions.py
-
-```bash
-
-# Mode = embedding
-
 uv run python contracts/ai_extensions.py \
   --mode embedding \
   --extractions outputs/week3/extractions.jsonl \
   --output validation_reports/ai_extensions_embedding.json
+```
 
-# Mode = prompt
-  uv run python contracts/ai_extensions.py \
+## Prompt validation
+
+```bash
+uv run python contracts/ai_extensions.py \
   --mode prompt \
   --extractions outputs/week3/extractions.jsonl \
   --output validation_reports/ai_extensions_prompt.json
+```
 
-# Mode = all
+## Full AI checks
 
+```bash
 uv run python contracts/ai_extensions.py \
   --mode all \
   --extractions outputs/week3/extractions.jsonl \
   --verdicts outputs/week2/verdicts.jsonl \
   --output validation_reports/ai_extensions.json
-
 ```
 
 ---
 
-
-# For week5
-
-## 1. Create the baseline run (no changes to data)
+# 6. Report Generation
 
 ```bash
+uv run python contracts/report_generator.py \
+  --reports-dir validation_reports \
+  --violations violation_log/violations.jsonl \
+  --schema-evolution validation_reports/schema_evolution_week3.json \
+  --output enforcer_report/report_data.json
+```
 
-uv run python contracts/runner.py \
-  --contract generated_contracts/week5_event_platform_events.yaml \
-  --data outputs/week5/events.jsonl \
-  --output validation_reports/week5_baseline.json
+## With AI metrics
 
+```bash
+uv run python contracts/report_generator.py \
+  --reports-dir validation_reports \
+  --violations violation_log/violations.jsonl \
+  --schema-evolution validation_reports/schema_evolution_week3.json \
+  --ai-metrics validation_reports/ai_extensions.json \
+  --output enforcer_report/report_data.json
 ```
 
 ---
 
-## 3. Run violated validation
+# 7. Inspect Outputs
 
 ```bash
-
-uv run python contracts/runner.py \
-  --contract generated_contracts/week5_event_platform_events.yaml \
-  --data outputs/week5/events_violated.jsonl \
-  --output validation_reports/week5_violated.json
-
+cat violation_log/violations.jsonl
 ```
+
+### Pretty print (JSONL-safe)
+
+```bash
+while read -r line; do echo "$line" | python -m json.tool; done < violation_log/violations.jsonl
+```
+
+### Check failures
+
+```bash
+grep -A 8 -B 2 '"status": "FAIL"' validation_reports/violated_run.json
+```
+
+---
+
+# Notes
+
+* Contracts are generated from real data (Week 3 and Week 5 outputs)
+* Validation reports are produced from actual runs (not synthetic examples)
+* Lineage is used for attribution and blast radius analysis
+* AI extensions cover embedding drift and prompt validation
+
+
+---
