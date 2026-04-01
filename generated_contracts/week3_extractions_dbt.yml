@@ -9,6 +9,10 @@ models:
       to 0-100 scale.
     tests:
     - not_null
+    - dbt_utils.expression_is_true:
+        expression: confidence >= 0.0
+    - dbt_utils.expression_is_true:
+        expression: confidence <= 1.0
   - name: content_hash
     description: Auto-generated column contract.
     tests:

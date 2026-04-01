@@ -1,10 +1,10 @@
 {
-  "report_id": "016125e8-4898-47df-8881-44af1bbecdbf",
+  "report_id": "3ca52358-2215-4b8b-adc0-33bdeb4067b9",
   "contract_id": "week3-document-refinery-extractions",
   "snapshot_id": "9538a3e0b59bd8a84f95270a0b0ff5095ef19a051413350e7edeb4c795bcbddc",
-  "run_timestamp": "2026-04-01T12:27:36Z",
-  "total_checks": 18,
-  "passed": 17,
+  "run_timestamp": "2026-04-01T20:46:40Z",
+  "total_checks": 16,
+  "passed": 15,
   "failed": 1,
   "warned": 0,
   "errored": 0,
@@ -50,18 +50,6 @@
         "080d5bf0-566f-4376-a7fa-991e9bfcea9c"
       ],
       "message": "Observed numeric values violate the configured minimum/maximum bounds."
-    },
-    {
-      "check_id": "week3-document-refinery-extractions.confidence.statistical_drift",
-      "column_name": "confidence",
-      "check_type": "statistical_drift",
-      "status": "PASS",
-      "actual_value": "current_mean=8511.4102, z_score=0.00",
-      "expected": "baseline_mean=8511.4102, threshold<=2 WARN, <=3 FAIL",
-      "severity": "LOW",
-      "records_failing": 0,
-      "sample_failing": [],
-      "message": "confidence mean within baseline tolerance (0.0 stddev)"
     },
     {
       "check_id": "week3-document-refinery-extractions.content_hash.required",
@@ -170,18 +158,6 @@
       "records_failing": 0,
       "sample_failing": [],
       "message": "All non-null values conform to expected type integer."
-    },
-    {
-      "check_id": "week3-document-refinery-extractions.page_number.statistical_drift",
-      "column_name": "page_number",
-      "check_type": "statistical_drift",
-      "status": "PASS",
-      "actual_value": "current_mean=86.3904, z_score=0.00",
-      "expected": "baseline_mean=86.3904, threshold<=2 WARN, <=3 FAIL",
-      "severity": "LOW",
-      "records_failing": 0,
-      "sample_failing": [],
-      "message": "page_number mean within baseline tolerance (0.0 stddev)"
     },
     {
       "check_id": "week3-document-refinery-extractions.source_path.required",
