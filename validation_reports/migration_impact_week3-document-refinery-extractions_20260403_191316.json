@@ -1,14 +1,15 @@
 {
   "contract_id": "week3-document-refinery-extractions",
-  "generated_at": "2026-04-01T12:30:52Z",
+  "generated_at": "2026-04-03T19:13:34Z",
   "since": "7 days ago",
-  "snapshot_before": "schema_snapshots/week3-document-refinery-extractions/20260331_112359.yaml",
-  "snapshot_after": "schema_snapshots/week3-document-refinery-extractions/20260401_120740.yaml",
+  "snapshot_before": "schema_snapshots/week3-document-refinery-extractions/20260403_190722.yaml",
+  "snapshot_after": "schema_snapshots/week3-document-refinery-extractions/20260403_191316.yaml",
   "compatibility_verdict": "NO_CHANGE",
   "change_count": 0,
   "changes": [],
   "full_blast_radius": {
     "affected_nodes": [
+      "week4-cartographer",
       "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20",
       "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40",
       "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69",
@@ -23,7 +24,7 @@
     "Regenerate contracts and schema snapshots after the migration is complete."
   ],
   "rollback_plan": [
-    "Restore the previous snapshot-backed contract for week3-document-refinery-extractions using 20260331_112359.yaml as the rollback target.",
+    "Restore the previous snapshot-backed contract for week3-document-refinery-extractions using 20260403_190722.yaml as the rollback target.",
     "Revert the producer-side code change that introduced the incompatible schema diff.",
     "Re-run validation against the restored dataset and confirm critical failures clear."
   ]

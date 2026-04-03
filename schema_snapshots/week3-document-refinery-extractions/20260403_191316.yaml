@@ -10,7 +10,7 @@ info:
 servers:
   local:
     type: local
-    path: outputs/week3/extractions_breaking.jsonl
+    path: outputs/week3/extractions.jsonl
     format: jsonl
 terms:
   usage: Internal inter-system data contract.

@@ -1,11 +1,14 @@
 {
-  "report_id": "3ca52358-2215-4b8b-adc0-33bdeb4067b9",
+  "report_id": "0a1aa335-bc83-4985-9f16-e1a3735d8773",
   "contract_id": "week3-document-refinery-extractions",
-  "snapshot_id": "9538a3e0b59bd8a84f95270a0b0ff5095ef19a051413350e7edeb4c795bcbddc",
-  "run_timestamp": "2026-04-01T20:46:40Z",
-  "total_checks": 16,
-  "passed": 15,
-  "failed": 1,
+  "snapshot_id": "0e65990f44db2d219a67ff0a58c6eb9642f9db34f56c909d151d140bee07873a",
+  "run_timestamp": "2026-04-03T19:10:22Z",
+  "enforcement_mode": "ENFORCE",
+  "blocking_violation_count": 2,
+  "would_block_pipeline": true,
+  "total_checks": 21,
+  "passed": 19,
+  "failed": 2,
   "warned": 0,
   "errored": 0,
   "results": [
@@ -31,25 +34,31 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type number."
+      "message": "All non-null observed values conform to expected type number."
     },
     {
       "check_id": "week3-document-refinery-extractions.confidence.range",
       "column_name": "confidence",
       "check_type": "range",
       "status": "FAIL",
-      "actual_value": "min=8500.0000, max=9000.0000, mean=8511.4102",
+      "actual_value": "min=85.0000, max=90.0000, mean=85.1141",
       "expected": "min>=0.0, max<=1.0",
       "severity": "CRITICAL",
       "records_failing": 8545,
-      "sample_failing": [
-        "62cb513d-7a1a-41f5-bbf4-7d33fd8b8734",
-        "4e889a38-68e0-46b2-9a74-746da2509e11",
-        "e5d22713-2476-4652-8101-2f58c7785341",
-        "d4b8c79e-7322-486e-af43-1ccb91134a24",
-        "080d5bf0-566f-4376-a7fa-991e9bfcea9c"
-      ],
+      "sample_failing": [],
       "message": "Observed numeric values violate the configured minimum/maximum bounds."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.confidence.statistical_drift",
+      "column_name": "confidence",
+      "check_type": "statistical_drift",
+      "status": "FAIL",
+      "actual_value": "current_mean=85.1141, z_score=11284.77",
+      "expected": "baseline_mean=0.8511, threshold<=2 WARN, <=3 FAIL",
+      "severity": "HIGH",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "confidence mean drifted 11284.8 stddev from baseline."
     },
     {
       "check_id": "week3-document-refinery-extractions.content_hash.required",
@@ -73,7 +82,7 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
     },
     {
       "check_id": "week3-document-refinery-extractions.doc_id.required",
@@ -97,7 +106,19 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.doc_id.enum",
+      "column_name": "doc_id",
+      "check_type": "enum",
+      "status": "PASS",
+      "actual_value": "all_values_within_enum",
+      "expected": "values in ['CBE ANNUAL REPORT 2023-24']",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "Enum conformance check."
     },
     {
       "check_id": "week3-document-refinery-extractions.ldu_id.required",
@@ -121,7 +142,7 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
     },
     {
       "check_id": "week3-document-refinery-extractions.ldu_id.uuid_format",
@@ -157,7 +178,19 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type integer."
+      "message": "All non-null observed values conform to expected type integer."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.page_number.statistical_drift",
+      "column_name": "page_number",
+      "check_type": "statistical_drift",
+      "status": "PASS",
+      "actual_value": "current_mean=86.3904, z_score=0.00",
+      "expected": "baseline_mean=86.3904, threshold<=2 WARN, <=3 FAIL",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "page_number mean within baseline tolerance (0.0 stddev)."
     },
     {
       "check_id": "week3-document-refinery-extractions.source_path.required",
@@ -181,7 +214,19 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.source_path.enum",
+      "column_name": "source_path",
+      "check_type": "enum",
+      "status": "PASS",
+      "actual_value": "all_values_within_enum",
+      "expected": "values in ['data/CBE ANNUAL REPORT 2023-24.pdf']",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "Enum conformance check."
     },
     {
       "check_id": "week3-document-refinery-extractions.text.required",
@@ -205,7 +250,19 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.quality.row_count",
+      "column_name": "__row_count__",
+      "check_type": "quality_rule",
+      "status": "PASS",
+      "actual_value": "row_count=8545",
+      "expected": "row_count >= 1",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "Row count check."
     }
   ]
 }

@@ -1,6 +1,6 @@
 version: 2
 models:
-- name: extractions
+- name: extractions_breaking
   description: One record per processed document. Each record contains extracted facts,
     entity references, processing metadata, and lineage-relevant identifiers.
   columns:
@@ -18,10 +18,14 @@ models:
     tests:
     - not_null
   - name: doc_id
-    description: Identifier field; observed values are not UUID-formatted.
+    description: Identifier field; observed values are not UUID-formatted. Low-cardinality
+      categorical field inferred from observed data.
     tests:
     - not_null
     - unique
+    - accepted_values:
+        values:
+        - CBE ANNUAL REPORT 2023-24
   - name: ldu_id
     description: Identifier field; UUID format verified from observed values.
     tests:
@@ -32,9 +36,12 @@ models:
     tests:
     - not_null
   - name: source_path
-    description: Auto-generated column contract.
+    description: Low-cardinality categorical field inferred from observed data.
     tests:
     - not_null
+    - accepted_values:
+        values:
+        - data/CBE ANNUAL REPORT 2023-24.pdf
   - name: text
     description: Auto-generated column contract.
     tests:

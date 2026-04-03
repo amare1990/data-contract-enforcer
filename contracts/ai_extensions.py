@@ -6,12 +6,8 @@ Implements three AI-specific contract checks:
 2. Prompt input schema validation
 3. Structured LLM output schema violation rate
 
-Example:
-    uv run python contracts/ai_extensions.py \
-      --mode all \
-      --extractions outputs/week3/extractions.jsonl \
-      --verdicts outputs/week2/verdicts.jsonl \
-      --output validation_reports/ai_extensions.json
+Supports both Week 3 extraction records and Week 5 event records by normalizing
+prompt inputs and text extraction across heterogeneous JSONL shapes.
 """
 
 from __future__ import annotations
@@ -19,9 +15,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
-from datetime import datetime, UTC
-from collections import Counter
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,18 +36,7 @@ PROMPT_INPUT_SCHEMA = {
     "properties": {
         "doc_id": {"type": "string", "minLength": 1},
         "source_path": {"type": "string", "minLength": 1},
-        "content_preview": {"type": "string", "maxLength": 8000},
-    },
-    "additionalProperties": False,
-}
-
-VERDICT_OUTPUT_SCHEMA = {
-    "type": "object",
-    "required": ["overall_verdict"],
-    "properties": {
-        "overall_verdict": {"type": "string", "enum": ["PASS", "FAIL", "WARN"]},
-        "overall_score": {"type": ["number", "integer"]},
-        "confidence": {"type": ["number", "integer"]},
+        "content_preview": {"type": "string", "minLength": 1, "maxLength": 8000},
     },
     "additionalProperties": True,
 }
@@ -69,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--extractions",
         default=None,
-        help="Path to Week 3 extractions JSONL",
+        help="Path to source JSONL for embedding/prompt checks",
     )
     parser.add_argument(
         "--verdicts",
@@ -84,19 +68,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--embedding-model",
         default="text-embedding-3-small",
-        help="Embedding model name (default: text-embedding-3-small)",
+        help="Embedding model name",
     )
     parser.add_argument(
         "--embedding-threshold",
         type=float,
         default=0.15,
-        help="Cosine-distance threshold for embedding drift failure (default: 0.15)",
+        help="Cosine-distance threshold for embedding drift failure",
     )
     parser.add_argument(
         "--warn-threshold",
         type=float,
         default=0.02,
-        help="Violation-rate threshold for WARN on structured outputs (default: 0.02)",
+        help="Violation-rate threshold for structured output WARN",
     )
     parser.add_argument(
         "--baseline-rate",
@@ -137,11 +121,6 @@ def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def deterministic_local_embedding(text: str, dim: int = 64) -> np.ndarray:
-    """Fallback embedding when API access/key is unavailable.
-
-    Uses hashed token counts to create a deterministic pseudo-embedding so the
-    extension remains runnable in evaluator/local environments.
-    """
     vec = np.zeros(dim, dtype=np.float64)
     for token in text.lower().split():
         digest = hashlib.sha256(token.encode("utf-8")).digest()
@@ -159,13 +138,7 @@ def embed_texts(texts: list[str], model: str) -> np.ndarray:
     if not sample:
         return np.zeros((0, 64), dtype=np.float64)
 
-    api_key = None
-    try:
-        import os
-
-        api_key = os.environ.get("OPENAI_API_KEY")
-    except Exception:
-        api_key = None
+    api_key = os.environ.get("OPENAI_API_KEY")
 
     if OpenAI is not None and api_key:
         client = OpenAI()
@@ -175,22 +148,47 @@ def embed_texts(texts: list[str], model: str) -> np.ndarray:
     return np.array([deterministic_local_embedding(text) for text in sample], dtype=np.float64)
 
 
-def extract_week3_texts(records: list[dict[str, Any]]) -> list[str]:
+def extract_texts(records: list[dict[str, Any]]) -> list[str]:
     texts: list[str] = []
+
     for record in records:
-        if isinstance(record.get("text"), str):
-            texts.append(record["text"])
-            continue
-        for fact in record.get("extracted_facts", []) or []:
-            text = fact.get("text")
-            if isinstance(text, str):
-                texts.append(text)
+        direct_text = record.get("text")
+        if isinstance(direct_text, str) and direct_text.strip():
+            texts.append(direct_text.strip())
+
+        extracted_facts = record.get("extracted_facts") or []
+        if isinstance(extracted_facts, list):
+            for fact in extracted_facts:
+                if not isinstance(fact, dict):
+                    continue
+                fact_text = fact.get("text")
+                if isinstance(fact_text, str) and fact_text.strip():
+                    texts.append(fact_text.strip())
+
+        payload = record.get("payload")
+        if isinstance(payload, dict):
+            for key in (
+                "output_summary",
+                "tool_input_summary",
+                "tool_output_summary",
+                "remediation_description",
+                "override_reason",
+            ):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    texts.append(value.strip())
+
     return texts
+
+
+def embedding_baseline_path(extractions_path: str | Path) -> Path:
+    stem = Path(extractions_path).stem
+    return Path("schema_snapshots") / f"embedding_baseline_{stem}.npz"
 
 
 def check_embedding_drift(
     texts: list[str],
-    baseline_path: str | Path = "schema_snapshots/embedding_baselines.npz",
+    baseline_path: str | Path,
     threshold: float = 0.15,
     model: str = "text-embedding-3-small",
 ) -> dict[str, Any]:
@@ -202,14 +200,14 @@ def check_embedding_drift(
             "threshold": threshold,
             "sample_size": 0,
             "interpretation": "No text values available for embedding drift analysis.",
-            "backend": "openai" if OpenAI is not None else "local-hash",
+            "backend": "openai" if (OpenAI is not None and os.environ.get("OPENAI_API_KEY")) else "local-hash",
         }
 
     centroid = vecs.mean(axis=0)
     baseline_path = Path(baseline_path)
     ensure_parent(baseline_path)
 
-    backend = "openai" if OpenAI is not None else "local-hash"
+    backend = "openai" if (OpenAI is not None and os.environ.get("OPENAI_API_KEY")) else "local-hash"
 
     if not baseline_path.exists():
         np.savez(baseline_path, centroid=centroid)
@@ -236,24 +234,60 @@ def check_embedding_drift(
 
 def build_prompt_input_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     prompt_inputs: list[dict[str, Any]] = []
+
     for record in records:
-        if "text" in record:
-            preview = str(record.get("text", ""))[:8000]
-        else:
-            pieces: list[str] = []
-            for fact in record.get("extracted_facts", []) or []:
-                text = fact.get("text")
-                if isinstance(text, str):
-                    pieces.append(text)
-            preview = " ".join(pieces)[:8000]
+        record_id = (
+            record.get("doc_id")
+            or record.get("event_id")
+            or record.get("id")
+            or ""
+        )
+
+        source_path = str(
+            record.get("source_path")
+            or record.get("event_type")
+            or record.get("record_type")
+            or "unknown"
+        )
+
+        preview_parts: list[str] = []
+
+        text_value = record.get("text")
+        if isinstance(text_value, str) and text_value.strip():
+            preview_parts.append(text_value.strip())
+
+        extracted_facts = record.get("extracted_facts") or []
+        if isinstance(extracted_facts, list):
+            for fact in extracted_facts:
+                if not isinstance(fact, dict):
+                    continue
+                fact_text = fact.get("text")
+                if isinstance(fact_text, str) and fact_text.strip():
+                    preview_parts.append(fact_text.strip())
+
+        payload = record.get("payload")
+        if isinstance(payload, dict):
+            for key in (
+                "output_summary",
+                "tool_input_summary",
+                "tool_output_summary",
+                "remediation_description",
+                "override_reason",
+            ):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    preview_parts.append(value.strip())
+
+        content_preview = " ".join(preview_parts).strip()[:8000]
 
         prompt_inputs.append(
             {
-                "doc_id": str(record.get("doc_id", "")),
-                "source_path": str(record.get("source_path", "")),
-                "content_preview": preview,
+                "doc_id": str(record_id),
+                "source_path": source_path,
+                "content_preview": content_preview,
             }
         )
+
     return prompt_inputs
 
 
@@ -275,7 +309,7 @@ def validate_prompt_inputs(
     qpath = Path(quarantine_path)
     if quarantined:
         ensure_parent(qpath)
-        with qpath.open("a", encoding="utf-8") as f:
+        with qpath.open("w", encoding="utf-8") as f:
             for row in quarantined:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
@@ -289,36 +323,65 @@ def validate_prompt_inputs(
     }
 
 
+def validate_verdict_record(record: dict[str, Any]) -> bool:
+    record_type = record.get("record_type")
+
+    if record_type == "report_summary":
+        required = {"record_type", "overall_score", "verdict"}
+        return required.issubset(record.keys())
+
+    if record_type == "criterion_summary":
+        required = {"record_type", "criterion", "final_score"}
+        return required.issubset(record.keys())
+
+    if record_type == "judicial_opinion":
+        required = {"record_type", "criterion", "judge", "judge_score", "argument"}
+        return required.issubset(record.keys())
+
+    return False
+
+
 def check_output_schema_violation_rate(
     verdict_records: list[dict[str, Any]],
     baseline_rate: float | None = None,
     warn_threshold: float = 0.02,
 ) -> dict[str, Any]:
-    total = len(verdict_records)
-    violations = 0
+    total_outputs = len(verdict_records)
+    if total_outputs == 0:
+        return {
+            "status": "WARN",
+            "total_outputs": 0,
+            "schema_violations": 0,
+            "violation_rate": 0.0,
+            "trend": "unknown",
+            "baseline_violation_rate": baseline_rate,
+            "warn_threshold": warn_threshold,
+        }
 
-    for record in verdict_records:
-        try:
-            validate(instance=record, schema=VERDICT_OUTPUT_SCHEMA)
-        except ValidationError:
-            violations += 1
-
-    rate = violations / max(total, 1)
+    violations = sum(1 for record in verdict_records if not validate_verdict_record(record))
+    violation_rate = violations / total_outputs
 
     if baseline_rate is None:
         trend = "unknown"
+    elif violation_rate < baseline_rate:
+        trend = "improving"
+    elif violation_rate > baseline_rate:
+        trend = "worsening"
     else:
-        trend = "rising" if rate > baseline_rate * 1.5 else "stable"
+        trend = "stable"
 
-    status = "WARN" if rate > warn_threshold else "PASS"
-    if trend == "rising" and status == "PASS":
+    if violation_rate == 0:
+        status = "PASS"
+    elif violation_rate <= warn_threshold:
+        status = "WARN"
+    else:
         status = "WARN"
 
     return {
         "status": status,
-        "total_outputs": total,
+        "total_outputs": total_outputs,
         "schema_violations": violations,
-        "violation_rate": round(rate, 4),
+        "violation_rate": round(violation_rate, 4),
         "trend": trend,
         "baseline_violation_rate": baseline_rate,
         "warn_threshold": warn_threshold,
@@ -337,9 +400,10 @@ def run_all(args: argparse.Namespace) -> dict[str, Any]:
         extraction_records = load_jsonl(args.extractions)
 
         if args.mode in {"all", "embedding"}:
-            texts = extract_week3_texts(extraction_records)
+            texts = extract_texts(extraction_records)
             output["embedding_drift"] = check_embedding_drift(
                 texts,
+                baseline_path=embedding_baseline_path(args.extractions),
                 threshold=args.embedding_threshold,
                 model=args.embedding_model,
             )

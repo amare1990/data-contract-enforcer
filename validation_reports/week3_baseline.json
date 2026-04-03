@@ -1,10 +1,13 @@
 {
-  "report_id": "4290fc88-e3e5-485e-93cf-b6dae93b0cff",
+  "report_id": "b259f345-b91e-4b11-b802-68d17bfce730",
   "contract_id": "week3-document-refinery-extractions",
   "snapshot_id": "2898f9fd1f3e37b983657374d3312f1a66d211eb636db5f1e8249fe79d782188",
-  "run_timestamp": "2026-03-31T11:37:06Z",
-  "total_checks": 16,
-  "passed": 16,
+  "run_timestamp": "2026-04-03T19:09:27Z",
+  "enforcement_mode": "AUDIT",
+  "blocking_violation_count": 0,
+  "would_block_pipeline": false,
+  "total_checks": 19,
+  "passed": 19,
   "failed": 0,
   "warned": 0,
   "errored": 0,
@@ -31,7 +34,7 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type number."
+      "message": "All non-null observed values conform to expected type number."
     },
     {
       "check_id": "week3-document-refinery-extractions.confidence.range",
@@ -67,7 +70,7 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
     },
     {
       "check_id": "week3-document-refinery-extractions.doc_id.required",
@@ -91,7 +94,19 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.doc_id.enum",
+      "column_name": "doc_id",
+      "check_type": "enum",
+      "status": "PASS",
+      "actual_value": "all_values_within_enum",
+      "expected": "values in ['CBE ANNUAL REPORT 2023-24']",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "Enum conformance check."
     },
     {
       "check_id": "week3-document-refinery-extractions.ldu_id.required",
@@ -115,7 +130,7 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
     },
     {
       "check_id": "week3-document-refinery-extractions.ldu_id.uuid_format",
@@ -151,7 +166,7 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type integer."
+      "message": "All non-null observed values conform to expected type integer."
     },
     {
       "check_id": "week3-document-refinery-extractions.source_path.required",
@@ -175,7 +190,19 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.source_path.enum",
+      "column_name": "source_path",
+      "check_type": "enum",
+      "status": "PASS",
+      "actual_value": "all_values_within_enum",
+      "expected": "values in ['data/CBE ANNUAL REPORT 2023-24.pdf']",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "Enum conformance check."
     },
     {
       "check_id": "week3-document-refinery-extractions.text.required",
@@ -199,7 +226,19 @@
       "severity": "LOW",
       "records_failing": 0,
       "sample_failing": [],
-      "message": "All non-null values conform to expected type string."
+      "message": "All non-null observed values conform to expected type string."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.quality.row_count",
+      "column_name": "__row_count__",
+      "check_type": "quality_rule",
+      "status": "PASS",
+      "actual_value": "row_count=8545",
+      "expected": "row_count >= 1",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "Row count check."
     }
   ]
 }

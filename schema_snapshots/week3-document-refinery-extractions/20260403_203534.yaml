@@ -10,7 +10,7 @@ info:
 servers:
   local:
     type: local
-    path: outputs/week3/extractions.jsonl
+    path: outputs/week3/extractions_breaking.jsonl
     format: jsonl
 terms:
   usage: Internal inter-system data contract.
@@ -30,7 +30,10 @@ schema:
   doc_id:
     type: string
     required: true
-    description: Identifier field; observed values are not UUID-formatted.
+    enum:
+    - CBE ANNUAL REPORT 2023-24
+    description: Identifier field; observed values are not UUID-formatted. Low-cardinality
+      categorical field inferred from observed data.
   ldu_id:
     type: string
     required: true
@@ -42,6 +45,9 @@ schema:
   source_path:
     type: string
     required: true
+    enum:
+    - data/CBE ANNUAL REPORT 2023-24.pdf
+    description: Low-cardinality categorical field inferred from observed data.
   text:
     type: string
     required: true
@@ -49,27 +55,32 @@ quality:
   type: SodaChecks
   specification:
     checks for extractions:
-    - missing_count(doc_id) = 0
-    - missing_count(source_path) = 0
-    - missing_count(ldu_id) = 0
-    - missing_count(page_number) = 0
-    - missing_count(text) = 0
     - missing_count(confidence) = 0
-    - missing_count(content_hash) = 0
-    - duplicate_count(doc_id) = 0
     - min(confidence) >= 0.0
     - max(confidence) <= 1.0
+    - missing_count(content_hash) = 0
+    - missing_count(doc_id) = 0
+    - duplicate_count(doc_id) = 0
+    - missing_count(ldu_id) = 0
+    - missing_count(page_number) = 0
+    - missing_count(source_path) = 0
+    - missing_count(text) = 0
     - row_count >= 1
-llm_annotations:
-- status: pending
-  fields:
-  - text
-  - content_hash
-  note: Business-meaning enrichment can be added for ambiguous columns using a model-assisted
-    pass. This generator keeps baseline contracts deterministic and offline-safe.
 lineage:
   upstream: []
   downstream:
+  - id: week4-cartographer
+    subscriber_team: week4
+    description: Registry subscriber for week3-document-refinery-extractions.
+    fields_consumed:
+    - doc_id
+    - extracted_facts
+    - extraction_model
+    breaking_if_changed:
+    - extracted_facts.confidence
+    - doc_id
+    validation_mode: ENFORCE
+    contact: week4-team@org.com
   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20
     description: Observed downstream consumer of extractions from lineage snapshot.
     fields_consumed:
@@ -77,6 +88,14 @@ lineage:
     - extracted_facts
     - entities
     - extraction_model
+    breaking_if_changed: &id001
+    - confidence
+    - content_hash
+    - doc_id
+    - ldu_id
+    - page_number
+    - source_path
+    - text
   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40
     description: Observed downstream consumer of extractions from lineage snapshot.
     fields_consumed:
@@ -84,6 +103,7 @@ lineage:
     - extracted_facts
     - entities
     - extraction_model
+    breaking_if_changed: *id001
   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69
     description: Observed downstream consumer of extractions from lineage snapshot.
     fields_consumed:
@@ -91,6 +111,7 @@ lineage:
     - extracted_facts
     - entities
     - extraction_model
+    breaking_if_changed: *id001
   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82
     description: Observed downstream consumer of extractions from lineage snapshot.
     fields_consumed:
@@ -98,3 +119,4 @@ lineage:
     - extracted_facts
     - entities
     - extraction_model
+    breaking_if_changed: *id001

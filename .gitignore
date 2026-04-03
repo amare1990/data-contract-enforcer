@@ -16,3 +16,10 @@ node_modules/
 
 
 
+# enforcer_report/
+# generated_contracts/
+# schema_snapshots/
+# validation_reports/
+# violation_log/
+
+data/

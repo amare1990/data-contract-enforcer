@@ -3,11 +3,11 @@
 
 Runs contract checks against a JSONL dataset and emits a structured JSON report.
 
-Example:
-    uv run python contracts/runner.py \
-      --contract generated_contracts/week3_extractions.yaml \
-      --data outputs/week3/extractions.jsonl \
-      --output validation_reports/week3_baseline.json
+Key design goals:
+- general nested-path validation for dotted fields and [*] array paths
+- compatibility with generator.py path-based schema inference
+- sparse optional fields should not become false column_missing errors
+- support for common contract checks plus generic cross-field quality rules
 """
 
 from __future__ import annotations
@@ -18,12 +18,16 @@ import json
 import math
 import re
 import uuid
-from collections import Counter
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+# from contracts.path_utils import extract_first, extract_values, path_exists_in_dataset
+from path_utils import extract_first, extract_values, path_exists_in_dataset
+
 
 UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 ISO_8601_Z_RE = re.compile(
@@ -36,7 +40,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contract", required=True, help="Path to contract YAML")
     parser.add_argument("--data", required=True, help="Path to JSONL data file")
     parser.add_argument("--output", required=True, help="Path to validation report JSON")
+    parser.add_argument("--mode", choices=["AUDIT", "WARN", "ENFORCE"], default="AUDIT", help="Enforcement mode (default: AUDIT)")
+    parser.add_argument("--fail-on-block", action="store_true", help="Exit non-zero when the selected mode would block the pipeline")
     return parser.parse_args()
+
+
+
+
+def blocking_severities_for_mode(mode: str) -> set[str]:
+    normalized = mode.upper()
+    if normalized == "WARN":
+        return {"CRITICAL"}
+    if normalized == "ENFORCE":
+        return {"CRITICAL", "HIGH"}
+    return set()
+
+
+def compute_blocking_violation_count(results: list[dict[str, Any]], mode: str) -> int:
+    blocking_severities = blocking_severities_for_mode(mode)
+    if not blocking_severities:
+        return 0
+    count = 0
+    for result in results:
+        if result.get("status") not in {"FAIL", "ERROR"}:
+            continue
+        if str(result.get("severity", "")).upper() in blocking_severities:
+            count += 1
+    return count
 
 
 def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -82,23 +112,20 @@ def to_iso_now() -> str:
 
 def safe_string(value: Any) -> str:
     if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False)
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
     return str(value)
 
 
-def normalize_scalar(value: Any) -> Any:
-    if isinstance(value, list):
+def try_parse_datetime(value: Any) -> datetime | None:
+    if value is None:
         return None
-    if isinstance(value, dict):
+    s = safe_string(value).strip()
+    if not s or not ISO_8601_Z_RE.match(s):
         return None
-    return value
-
-
-def get_column_values(records: list[dict[str, Any]], column_name: str) -> list[Any]:
-    values: list[Any] = []
-    for record in records:
-        values.append(record.get(column_name))
-    return values
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def try_parse_float(value: Any) -> float | None:
@@ -106,9 +133,7 @@ def try_parse_float(value: Any) -> float | None:
         return None
     if isinstance(value, (int, float)):
         parsed = float(value)
-        if math.isfinite(parsed):
-            return parsed
-        return None
+        return parsed if math.isfinite(parsed) else None
     if isinstance(value, str):
         text = value.strip()
         if not text:
@@ -117,26 +142,8 @@ def try_parse_float(value: Any) -> float | None:
             parsed = float(text)
         except ValueError:
             return None
-        if math.isfinite(parsed):
-            return parsed
+        return parsed if math.isfinite(parsed) else None
     return None
-
-
-def is_numeric_column(values: list[Any]) -> bool:
-    non_null = [v for v in values if v is not None]
-    if not non_null:
-        return False
-    numeric_count = sum(1 for v in non_null if try_parse_float(v) is not None)
-    return (numeric_count / len(non_null)) >= 0.95
-
-
-def collect_numeric_values(values: list[Any]) -> list[float]:
-    out: list[float] = []
-    for value in values:
-        parsed = try_parse_float(value)
-        if parsed is not None:
-            out.append(parsed)
-    return out
 
 
 def mean(values: list[float]) -> float:
@@ -151,18 +158,11 @@ def stddev(values: list[float]) -> float:
     return math.sqrt(max(variance, 0.0))
 
 
-def percentile(values: list[float], q: float) -> float:
-    if not values:
-        raise ValueError("Cannot compute percentile of empty list")
-    ordered = sorted(values)
-    if len(ordered) == 1:
-        return ordered[0]
-    pos = (len(ordered) - 1) * q
-    lo = math.floor(pos)
-    hi = math.ceil(pos)
-    if lo == hi:
-        return ordered[lo]
-    return ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
+def record_identifier(record: dict[str, Any], fallback_index: int) -> str:
+    for key in ("fact_id", "ldu_id", "event_id", "doc_id", "document_id", "id", "snapshot_id", "trace_id"):
+        if key in record and record[key] is not None:
+            return safe_string(record[key])
+    return f"record_{fallback_index}"
 
 
 def build_result(
@@ -201,218 +201,46 @@ def severity_for_status(status: str, default_fail_severity: str = "CRITICAL") ->
     return "LOW"
 
 
-def record_identifier(record: dict[str, Any], fallback_index: int) -> str:
-    for key in ("fact_id", "ldu_id", "event_id", "doc_id", "id"):
-        if key in record and record[key] is not None:
-            return safe_string(record[key])
-    return f"record_{fallback_index}"
+def dataset_has_column(records: list[dict[str, Any]], column_name: str) -> bool:
+    return path_exists_in_dataset(records, column_name)
 
 
-def check_required(column: str, values: list[Any], contract_id: str) -> dict[str, Any]:
-    failing = [i for i, v in enumerate(values) if v is None or (isinstance(v, str) and not v.strip())]
-    status = "PASS" if not failing else "FAIL"
-    return build_result(
-        check_id=f"{contract_id}.{column}.required",
-        column_name=column,
-        check_type="required",
-        status=status,
-        actual_value=f"missing_count={len(failing)}",
-        expected="missing_count=0",
-        severity=severity_for_status(status),
-        records_failing=len(failing),
-        sample_failing=[str(i) for i in failing[:5]],
-        message="Required field must be present on every record." if failing else "Required field present on all records.",
-    )
+def get_column_values(records: list[dict[str, Any]], column_name: str) -> list[Any]:
+    values: list[Any] = []
+    for record in records:
+        extracted = extract_values(record, column_name)
+        if not extracted:
+            values.append(None)
+        else:
+            values.extend(extracted)
+    return values
 
 
-def check_type(column: str, values: list[Any], expected_type: str, contract_id: str) -> dict[str, Any]:
-    non_null = [v for v in values if v is not None]
-    if not non_null:
-        return build_result(
-            check_id=f"{contract_id}.{column}.type",
-            column_name=column,
-            check_type="type",
-            status="ERROR",
-            actual_value="column missing or all null",
-            expected=f"type={expected_type}",
-            severity="CRITICAL",
-            records_failing=0,
-            message="Column cannot be type-checked because no non-null values were found.",
-        )
-
-    failing: list[int] = []
-    if expected_type in {"number", "integer"}:
-        for i, v in enumerate(values):
-            if v is None:
-                continue
-            parsed = try_parse_float(v)
-            if parsed is None:
-                failing.append(i)
-            elif expected_type == "integer" and not float(parsed).is_integer():
-                failing.append(i)
-    elif expected_type == "string":
-        for i, v in enumerate(values):
-            if v is None:
-                continue
-            if isinstance(v, (dict, list)):
-                failing.append(i)
-    elif expected_type == "boolean":
-        for i, v in enumerate(values):
-            if v is None:
-                continue
-            if not isinstance(v, bool):
-                failing.append(i)
-
-    status = "PASS" if not failing else "FAIL"
-    return build_result(
-        check_id=f"{contract_id}.{column}.type",
-        column_name=column,
-        check_type="type",
-        status=status,
-        actual_value=f"invalid_type_count={len(failing)}",
-        expected=f"type={expected_type}",
-        severity=severity_for_status(status),
-        records_failing=len(failing),
-        sample_failing=[str(i) for i in failing[:5]],
-        message=(
-            f"Observed values do not conform to expected type {expected_type}."
-            if failing
-            else f"All non-null values conform to expected type {expected_type}."
-        ),
-    )
+def collect_non_null_values(records: list[dict[str, Any]], column_name: str) -> list[Any]:
+    out: list[Any] = []
+    for record in records:
+        for value in extract_values(record, column_name):
+            if value is not None:
+                out.append(value)
+    return out
 
 
-def check_enum(column: str, values: list[Any], enum_values: list[str], contract_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
-    allowed = set(enum_values)
-    failing_indices: list[int] = []
-    bad_values: list[str] = []
-    for i, v in enumerate(values):
-        if v is None:
-            continue
-        sv = safe_string(v)
-        if sv not in allowed:
-            failing_indices.append(i)
-            bad_values.append(sv)
-
-    status = "PASS" if not failing_indices else "FAIL"
-    return build_result(
-        check_id=f"{contract_id}.{column}.enum",
-        column_name=column,
-        check_type="enum",
-        status=status,
-        actual_value=(
-            "all_values_within_enum"
-            if not failing_indices
-            else f"invalid_count={len(failing_indices)}, invalid_values={sorted(set(bad_values))[:5]}"
-        ),
-        expected=f"values in {enum_values}",
-        severity=severity_for_status(status),
-        records_failing=len(failing_indices),
-        sample_failing=[record_identifier(records[i], i) for i in failing_indices[:5]],
-        message="Enum conformance check." if not failing_indices else "Observed values outside allowed enum.",
-    )
+def count_missing_required(records: list[dict[str, Any]], column_name: str) -> int:
+    missing = 0
+    for record in records:
+        vals = extract_values(record, column_name)
+        if not vals or all(v is None for v in vals):
+            missing += 1
+    return missing
 
 
-def check_uuid_format(column: str, values: list[Any], contract_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
-    failing: list[int] = []
-    for i, v in enumerate(values):
-        if v is None:
-            continue
-        if not UUID_RE.match(safe_string(v).strip()):
-            failing.append(i)
-
-    status = "PASS" if not failing else "FAIL"
-    return build_result(
-        check_id=f"{contract_id}.{column}.uuid_format",
-        column_name=column,
-        check_type="uuid_format",
-        status=status,
-        actual_value=f"invalid_uuid_count={len(failing)}",
-        expected="regex ^[0-9a-fA-F-]{36}$",
-        severity=severity_for_status(status),
-        records_failing=len(failing),
-        sample_failing=[record_identifier(records[i], i) for i in failing[:5]],
-        message="UUID format validation." if not failing else "One or more values do not match UUID format.",
-    )
-
-
-def check_datetime_format(column: str, values: list[Any], contract_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
-    failing: list[int] = []
-    for i, v in enumerate(values):
-        if v is None:
-            continue
-        s = safe_string(v).strip()
-        if not ISO_8601_Z_RE.match(s):
-            failing.append(i)
-            continue
-        try:
-            datetime.fromisoformat(s.replace("Z", "+00:00"))
-        except ValueError:
-            failing.append(i)
-
-    status = "PASS" if not failing else "FAIL"
-    return build_result(
-        check_id=f"{contract_id}.{column}.datetime_format",
-        column_name=column,
-        check_type="datetime_format",
-        status=status,
-        actual_value=f"invalid_datetime_count={len(failing)}",
-        expected="ISO 8601 date-time",
-        severity=severity_for_status(status),
-        records_failing=len(failing),
-        sample_failing=[record_identifier(records[i], i) for i in failing[:5]],
-        message="Date-time format validation." if not failing else "One or more values are not parseable ISO 8601 timestamps.",
-    )
-
-
-def check_range(column: str, values: list[Any], minimum: float | None, maximum: float | None, contract_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
-    numeric_values = collect_numeric_values(values)
-    if not numeric_values:
-        return build_result(
-            check_id=f"{contract_id}.{column}.range",
-            column_name=column,
-            check_type="range",
-            status="ERROR",
-            actual_value="no_numeric_values_found",
-            expected=f"min>={minimum}, max<={maximum}",
-            severity="CRITICAL",
-            message="Range check could not execute because no numeric values were available.",
-        )
-
-    failing: list[int] = []
-    for i, v in enumerate(values):
-        parsed = try_parse_float(v)
-        if parsed is None:
-            continue
-        if minimum is not None and parsed < minimum:
-            failing.append(i)
-        elif maximum is not None and parsed > maximum:
-            failing.append(i)
-
-    actual = f"min={min(numeric_values):.4f}, max={max(numeric_values):.4f}, mean={mean(numeric_values):.4f}"
-    expected_parts: list[str] = []
-    if minimum is not None:
-        expected_parts.append(f"min>={minimum}")
-    if maximum is not None:
-        expected_parts.append(f"max<={maximum}")
-    expected = ", ".join(expected_parts)
-    status = "PASS" if not failing else "FAIL"
-    return build_result(
-        check_id=f"{contract_id}.{column}.range",
-        column_name=column,
-        check_type="range",
-        status=status,
-        actual_value=actual,
-        expected=expected,
-        severity=severity_for_status(status),
-        records_failing=len(failing),
-        sample_failing=[record_identifier(records[i], i) for i in failing[:5]],
-        message=(
-            "Numeric values are within the allowed range."
-            if not failing
-            else "Observed numeric values violate the configured minimum/maximum bounds."
-        ),
-    )
+def collect_numeric_values(values: list[Any]) -> list[float]:
+    out: list[float] = []
+    for value in values:
+        parsed = try_parse_float(value)
+        if parsed is not None:
+            out.append(parsed)
+    return out
 
 
 def load_baselines(path: Path) -> dict[str, Any]:
@@ -429,11 +257,354 @@ def write_baselines(path: Path, columns: dict[str, Any]) -> None:
         json.dump(payload, f, indent=2)
 
 
-def check_statistical_drift(column: str, values: list[Any], baselines: dict[str, Any], contract_id: str) -> dict[str, Any] | None:
+def check_required(
+    records: list[dict[str, Any]],
+    column: str,
+    required: bool,
+    contract_id: str,
+) -> dict[str, Any] | None:
+    if not required:
+        return None
+
+    exists_anywhere = dataset_has_column(records, column)
+    missing_count = count_missing_required(records, column)
+
+    if not exists_anywhere:
+        status = "ERROR"
+        actual_value = "column_missing"
+        message = "Required field path does not exist anywhere in the dataset."
+    elif missing_count > 0:
+        status = "FAIL"
+        actual_value = f"missing_count={missing_count}"
+        message = f"Required field missing on {missing_count} records."
+    else:
+        status = "PASS"
+        actual_value = "missing_count=0"
+        message = "Required field present on all records."
+
+    return build_result(
+        check_id=f"{contract_id}.{column}.required",
+        column_name=column,
+        check_type="required",
+        status=status,
+        actual_value=actual_value,
+        expected="missing_count=0",
+        severity=severity_for_status(status),
+        records_failing=missing_count if status == "FAIL" else 0,
+        message=message,
+    )
+
+
+def check_type(
+    records: list[dict[str, Any]],
+    column: str,
+    expected_type: str,
+    contract_id: str,
+) -> dict[str, Any]:
+    values = collect_non_null_values(records, column)
+    exists_anywhere = dataset_has_column(records, column)
+
+    if not values:
+        if exists_anywhere:
+            return build_result(
+                check_id=f"{contract_id}.{column}.type",
+                column_name=column,
+                check_type="type",
+                status="WARN",
+                actual_value="no_non_null_values_found",
+                expected=f"type={expected_type}",
+                severity="WARNING",
+                message="Field exists but no non-null values were available for type checking.",
+            )
+        return build_result(
+            check_id=f"{contract_id}.{column}.type",
+            column_name=column,
+            check_type="type",
+            status="ERROR",
+            actual_value="column_missing",
+            expected=f"type={expected_type}",
+            severity="CRITICAL",
+            message="Column/path does not exist in dataset.",
+        )
+
+    invalid_count = 0
+
+    if expected_type == "integer":
+        for value in values:
+            parsed = try_parse_float(value)
+            if parsed is None or not float(parsed).is_integer():
+                invalid_count += 1
+    elif expected_type == "number":
+        for value in values:
+            if try_parse_float(value) is None:
+                invalid_count += 1
+    elif expected_type == "string":
+        for value in values:
+            if isinstance(value, (dict, list)):
+                invalid_count += 1
+    elif expected_type == "boolean":
+        for value in values:
+            if not isinstance(value, bool):
+                invalid_count += 1
+    elif expected_type == "object":
+        for value in values:
+            if not isinstance(value, dict):
+                invalid_count += 1
+    elif expected_type == "array":
+        for value in values:
+            if not isinstance(value, list):
+                invalid_count += 1
+
+    status = "PASS" if invalid_count == 0 else "FAIL"
+    return build_result(
+        check_id=f"{contract_id}.{column}.type",
+        column_name=column,
+        check_type="type",
+        status=status,
+        actual_value=f"invalid_type_count={invalid_count}",
+        expected=f"type={expected_type}",
+        severity=severity_for_status(status),
+        records_failing=invalid_count,
+        message=(
+            f"All non-null observed values conform to expected type {expected_type}."
+            if status == "PASS"
+            else f"Observed values do not conform to expected type {expected_type}."
+        ),
+    )
+
+
+def check_enum(
+    records: list[dict[str, Any]],
+    column: str,
+    enum_values: list[str],
+    contract_id: str,
+) -> dict[str, Any]:
+    values = collect_non_null_values(records, column)
+    exists_anywhere = dataset_has_column(records, column)
+
+    if not values:
+        if exists_anywhere:
+            return build_result(
+                check_id=f"{contract_id}.{column}.enum",
+                column_name=column,
+                check_type="enum",
+                status="WARN",
+                actual_value="no_non_null_values_found",
+                expected=f"values in {enum_values}",
+                severity="WARNING",
+                message="Field exists but no non-null values were available for enum checking.",
+            )
+        return build_result(
+            check_id=f"{contract_id}.{column}.enum",
+            column_name=column,
+            check_type="enum",
+            status="ERROR",
+            actual_value="column_missing",
+            expected=f"values in {enum_values}",
+            severity="CRITICAL",
+            message="Column/path does not exist in dataset.",
+        )
+
+    allowed = set(enum_values)
+    bad_values = sorted({safe_string(v) for v in values if safe_string(v) not in allowed})
+    invalid_count = len([v for v in values if safe_string(v) not in allowed])
+
+    status = "PASS" if invalid_count == 0 else "FAIL"
+    return build_result(
+        check_id=f"{contract_id}.{column}.enum",
+        column_name=column,
+        check_type="enum",
+        status=status,
+        actual_value="all_values_within_enum" if status == "PASS" else f"invalid_count={invalid_count}, invalid_values={bad_values[:5]}",
+        expected=f"values in {enum_values}",
+        severity=severity_for_status(status),
+        records_failing=invalid_count,
+        message="Enum conformance check." if status == "PASS" else "Observed values outside allowed enum.",
+    )
+
+
+def check_uuid_format(
+    records: list[dict[str, Any]],
+    column: str,
+    contract_id: str,
+) -> dict[str, Any]:
+    values = collect_non_null_values(records, column)
+    exists_anywhere = dataset_has_column(records, column)
+
+    if not values:
+        if exists_anywhere:
+            return build_result(
+                check_id=f"{contract_id}.{column}.uuid_format",
+                column_name=column,
+                check_type="uuid_format",
+                status="WARN",
+                actual_value="no_non_null_values_found",
+                expected="regex ^[0-9a-fA-F-]{36}$",
+                severity="WARNING",
+                message="Field exists but no non-null values were available for UUID validation.",
+            )
+        return build_result(
+            check_id=f"{contract_id}.{column}.uuid_format",
+            column_name=column,
+            check_type="uuid_format",
+            status="ERROR",
+            actual_value="column_missing",
+            expected="regex ^[0-9a-fA-F-]{36}$",
+            severity="CRITICAL",
+            message="Column/path does not exist in dataset.",
+        )
+
+    invalid_count = sum(1 for v in values if not UUID_RE.match(safe_string(v).strip()))
+    status = "PASS" if invalid_count == 0 else "FAIL"
+
+    return build_result(
+        check_id=f"{contract_id}.{column}.uuid_format",
+        column_name=column,
+        check_type="uuid_format",
+        status=status,
+        actual_value=f"invalid_uuid_count={invalid_count}",
+        expected="regex ^[0-9a-fA-F-]{36}$",
+        severity=severity_for_status(status),
+        records_failing=invalid_count,
+        message="UUID format validation." if status == "PASS" else "One or more values do not match UUID format.",
+    )
+
+
+def check_datetime_format(
+    records: list[dict[str, Any]],
+    column: str,
+    contract_id: str,
+) -> dict[str, Any]:
+    values = collect_non_null_values(records, column)
+    exists_anywhere = dataset_has_column(records, column)
+
+    if not values:
+        if exists_anywhere:
+            return build_result(
+                check_id=f"{contract_id}.{column}.datetime_format",
+                column_name=column,
+                check_type="datetime_format",
+                status="WARN",
+                actual_value="no_non_null_values_found",
+                expected="ISO 8601 date-time",
+                severity="WARNING",
+                message="Field exists but no non-null values were available for datetime validation.",
+            )
+        return build_result(
+            check_id=f"{contract_id}.{column}.datetime_format",
+            column_name=column,
+            check_type="datetime_format",
+            status="ERROR",
+            actual_value="column_missing",
+            expected="ISO 8601 date-time",
+            severity="CRITICAL",
+            message="Column/path does not exist in dataset.",
+        )
+
+    invalid_count = sum(1 for v in values if try_parse_datetime(v) is None)
+    status = "PASS" if invalid_count == 0 else "FAIL"
+
+    return build_result(
+        check_id=f"{contract_id}.{column}.datetime_format",
+        column_name=column,
+        check_type="datetime_format",
+        status=status,
+        actual_value=f"invalid_datetime_count={invalid_count}",
+        expected="ISO 8601 date-time",
+        severity=severity_for_status(status),
+        records_failing=invalid_count,
+        message="Date-time format validation." if status == "PASS" else "One or more values are not parseable ISO 8601 timestamps.",
+    )
+
+
+def check_range(
+    records: list[dict[str, Any]],
+    column: str,
+    minimum: float | None,
+    maximum: float | None,
+    contract_id: str,
+) -> dict[str, Any]:
+    values = collect_non_null_values(records, column)
+    exists_anywhere = dataset_has_column(records, column)
+
+    if not values:
+        if exists_anywhere:
+            return build_result(
+                check_id=f"{contract_id}.{column}.range",
+                column_name=column,
+                check_type="range",
+                status="WARN",
+                actual_value="no_non_null_values_found",
+                expected=f"min>={minimum}, max<={maximum}",
+                severity="WARNING",
+                message="Field exists but no non-null values were available for range checking.",
+            )
+        return build_result(
+            check_id=f"{contract_id}.{column}.range",
+            column_name=column,
+            check_type="range",
+            status="ERROR",
+            actual_value="column_missing",
+            expected=f"min>={minimum}, max<={maximum}",
+            severity="CRITICAL",
+            message="Column/path does not exist in dataset.",
+        )
+
+    numeric_values = collect_numeric_values(values)
+    if not numeric_values:
+        return build_result(
+            check_id=f"{contract_id}.{column}.range",
+            column_name=column,
+            check_type="range",
+            status="ERROR",
+            actual_value="no_numeric_values_found",
+            expected=f"min>={minimum}, max<={maximum}",
+            severity="CRITICAL",
+            message="Range check could not execute because no numeric values were available.",
+        )
+
+    invalid_count = 0
+    for value in numeric_values:
+        if minimum is not None and value < minimum:
+            invalid_count += 1
+        elif maximum is not None and value > maximum:
+            invalid_count += 1
+
+    expected_parts: list[str] = []
+    if minimum is not None:
+        expected_parts.append(f"min>={minimum}")
+    if maximum is not None:
+        expected_parts.append(f"max<={maximum}")
+
+    status = "PASS" if invalid_count == 0 else "FAIL"
+    return build_result(
+        check_id=f"{contract_id}.{column}.range",
+        column_name=column,
+        check_type="range",
+        status=status,
+        actual_value=f"min={min(numeric_values):.4f}, max={max(numeric_values):.4f}, mean={mean(numeric_values):.4f}",
+        expected=", ".join(expected_parts),
+        severity=severity_for_status(status),
+        records_failing=invalid_count,
+        message=(
+            "Numeric values are within the allowed range."
+            if status == "PASS"
+            else "Observed numeric values violate the configured minimum/maximum bounds."
+        ),
+    )
+
+
+def check_statistical_drift(
+    records: list[dict[str, Any]],
+    column: str,
+    baselines: dict[str, Any],
+    contract_id: str,
+) -> dict[str, Any] | None:
     baseline_columns = baselines.get("columns", {})
     if column not in baseline_columns:
         return None
 
+    values = collect_non_null_values(records, column)
     numeric_values = collect_numeric_values(values)
     if not numeric_values:
         return build_result(
@@ -456,15 +627,15 @@ def check_statistical_drift(column: str, values: list[Any], baselines: dict[str,
     if z_score > 3:
         status = "FAIL"
         severity = "HIGH"
-        message = f"{column} mean drifted {z_score:.1f} stddev from baseline"
+        message = f"{column} mean drifted {z_score:.1f} stddev from baseline."
     elif z_score > 2:
         status = "WARN"
         severity = "WARNING"
-        message = f"{column} mean within warning range ({z_score:.1f} stddev)"
+        message = f"{column} mean within warning range ({z_score:.1f} stddev)."
     else:
         status = "PASS"
         severity = "LOW"
-        message = f"{column} mean within baseline tolerance ({z_score:.1f} stddev)"
+        message = f"{column} mean within baseline tolerance ({z_score:.1f} stddev)."
 
     return build_result(
         check_id=f"{contract_id}.{column}.statistical_drift",
@@ -474,8 +645,6 @@ def check_statistical_drift(column: str, values: list[Any], baselines: dict[str,
         actual_value=f"current_mean={current_mean:.4f}, z_score={z_score:.2f}",
         expected=f"baseline_mean={baseline_mean:.4f}, threshold<=2 WARN, <=3 FAIL",
         severity=severity,
-        records_failing=0,
-        sample_failing=[],
         message=message,
     )
 
@@ -483,14 +652,13 @@ def check_statistical_drift(column: str, values: list[Any], baselines: dict[str,
 def update_baseline_candidates(records: list[dict[str, Any]], contract_schema: dict[str, Any]) -> dict[str, Any]:
     baseline_columns: dict[str, Any] = {}
     for column in contract_schema:
-        values = get_column_values(records, column)
+        values = collect_non_null_values(records, column)
+        if not values:
+            continue
         numeric_values = collect_numeric_values(values)
-        non_null = [v for v in values if v is not None]
-        if not non_null:
-            continue
-        if (len(numeric_values) / len(non_null)) < 0.95:
-            continue
         if not numeric_values:
+            continue
+        if (len(numeric_values) / len(values)) < 0.95:
             continue
         baseline_columns[column] = {
             "mean": mean(numeric_values),
@@ -499,7 +667,126 @@ def update_baseline_candidates(records: list[dict[str, Any]], contract_schema: d
     return baseline_columns
 
 
-def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], data_path: str | Path) -> dict[str, Any]:
+def validate_timestamp_order(records: list[dict[str, Any]], earlier_col: str, later_col: str) -> tuple[int, list[str]]:
+    failing: list[str] = []
+    for idx, record in enumerate(records):
+        earlier = extract_first(record, earlier_col)
+        later = extract_first(record, later_col)
+        earlier_dt = try_parse_datetime(earlier)
+        later_dt = try_parse_datetime(later)
+        if earlier_dt is None or later_dt is None:
+            continue
+        if later_dt < earlier_dt:
+            failing.append(record_identifier(record, idx))
+    return len(failing), failing[:5]
+
+
+def validate_monotonic_sequence(records: list[dict[str, Any]], group_col: str, seq_col: str) -> tuple[int, list[str]]:
+    groups: dict[str, list[tuple[int, int, str]]] = defaultdict(list)
+
+    for idx, record in enumerate(records):
+        group = extract_first(record, group_col)
+        seq = extract_first(record, seq_col)
+        ts = extract_first(record, "occurred_at")
+
+        parsed_seq = try_parse_float(seq)
+        if group is None or parsed_seq is None or not float(parsed_seq).is_integer():
+            continue
+
+        groups[safe_string(group)].append((idx, int(parsed_seq), safe_string(ts) if ts is not None else ""))
+
+    failures: list[str] = []
+    for group, items in groups.items():
+        items.sort(key=lambda x: (x[2], x[1]))
+        previous_seq: int | None = None
+        for idx, seq, _ in items:
+            if previous_seq is not None and seq <= previous_seq:
+                failures.append(f"{group}:{record_identifier(records[idx], idx)}")
+            previous_seq = seq
+
+    return len(failures), failures[:5]
+
+
+def parse_quality_checks(contract: dict[str, Any]) -> list[str]:
+    quality = contract.get("quality", {})
+    specification = quality.get("specification", {})
+    checks: list[str] = []
+    for value in specification.values():
+        if isinstance(value, list):
+            checks.extend([str(v) for v in value])
+    return checks
+
+
+def run_quality_checks(records: list[dict[str, Any]], contract: dict[str, Any]) -> list[dict[str, Any]]:
+    contract_id = contract.get("id", "unknown_contract")
+    checks = parse_quality_checks(contract)
+    results: list[dict[str, Any]] = []
+
+    for check in checks:
+        stripped = check.strip()
+
+        if stripped == "recorded_at >= occurred_at":
+            failing_count, sample = validate_timestamp_order(records, "occurred_at", "recorded_at")
+            status = "PASS" if failing_count == 0 else "FAIL"
+            results.append(
+                build_result(
+                    check_id=f"{contract_id}.quality.recorded_at_gte_occurred_at",
+                    column_name="recorded_at,occurred_at",
+                    check_type="quality_rule",
+                    status=status,
+                    actual_value=f"violations={failing_count}",
+                    expected="recorded_at >= occurred_at",
+                    severity=severity_for_status(status),
+                    records_failing=failing_count,
+                    sample_failing=sample,
+                    message=(
+                        "All records satisfy recorded_at >= occurred_at."
+                        if status == "PASS"
+                        else "Some records violate recorded_at >= occurred_at."
+                    ),
+                )
+            )
+        elif stripped == "sequence_number is_monotonic_per aggregate_id":
+            failing_count, sample = validate_monotonic_sequence(records, "aggregate_id", "sequence_number")
+            status = "PASS" if failing_count == 0 else "FAIL"
+            results.append(
+                build_result(
+                    check_id=f"{contract_id}.quality.sequence_monotonic_per_aggregate",
+                    column_name="aggregate_id,sequence_number",
+                    check_type="quality_rule",
+                    status=status,
+                    actual_value=f"violations={failing_count}",
+                    expected="sequence_number is_monotonic_per aggregate_id",
+                    severity=severity_for_status(status),
+                    records_failing=failing_count,
+                    sample_failing=sample,
+                    message=(
+                        "All aggregate streams are monotonic by sequence_number."
+                        if status == "PASS"
+                        else "Some aggregate streams violate monotonic sequence ordering."
+                    ),
+                )
+            )
+        elif stripped == "row_count >= 1":
+            status = "PASS" if len(records) >= 1 else "FAIL"
+            results.append(
+                build_result(
+                    check_id=f"{contract_id}.quality.row_count",
+                    column_name="__row_count__",
+                    check_type="quality_rule",
+                    status=status,
+                    actual_value=f"row_count={len(records)}",
+                    expected="row_count >= 1",
+                    severity=severity_for_status(status),
+                    records_failing=0 if status == "PASS" else 1,
+                    message="Row count check.",
+                )
+            )
+
+    return results
+
+
+def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], data_path: str | Path, mode: str = "AUDIT") -> dict[str, Any]:
     contract_id = contract.get("id", "unknown_contract")
     contract_schema = contract.get("schema", {})
     results: list[dict[str, Any]] = []
@@ -508,54 +795,38 @@ def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], d
     baselines = load_baselines(baselines_path)
 
     for column, clause in contract_schema.items():
-        values = get_column_values(records, column)
-        column_missing = all(v is None for v in values)
-
-        if clause.get("required"):
-            results.append(check_required(column, values, contract_id))
-
-        if column_missing:
-            results.append(
-                build_result(
-                    check_id=f"{contract_id}.{column}.presence",
-                    column_name=column,
-                    check_type="presence",
-                    status="ERROR",
-                    actual_value="column_missing",
-                    expected="column exists",
-                    severity="CRITICAL",
-                    message="Column does not exist in the observed dataset; continuing with partial failure handling.",
-                )
-            )
-            continue
+        required_result = check_required(records, column, bool(clause.get("required")), contract_id)
+        if required_result is not None:
+            results.append(required_result)
 
         expected_type = clause.get("type")
         if expected_type:
-            results.append(check_type(column, values, expected_type, contract_id))
+            results.append(check_type(records, column, expected_type, contract_id))
 
         if "enum" in clause:
-            results.append(check_enum(column, values, clause["enum"], contract_id, records))
+            results.append(check_enum(records, column, clause["enum"], contract_id))
 
         if clause.get("format") == "uuid":
-            results.append(check_uuid_format(column, values, contract_id, records))
+            results.append(check_uuid_format(records, column, contract_id))
         elif clause.get("format") == "date-time":
-            results.append(check_datetime_format(column, values, contract_id, records))
+            results.append(check_datetime_format(records, column, contract_id))
 
         if "minimum" in clause or "maximum" in clause:
             results.append(
                 check_range(
+                    records,
                     column,
-                    values,
                     clause.get("minimum"),
                     clause.get("maximum"),
                     contract_id,
-                    records,
                 )
             )
 
-        drift_result = check_statistical_drift(column, values, baselines, contract_id)
+        drift_result = check_statistical_drift(records, column, baselines, contract_id)
         if drift_result is not None:
             results.append(drift_result)
+
+    results.extend(run_quality_checks(records, contract))
 
     baseline_candidates = update_baseline_candidates(records, contract_schema)
     if baseline_candidates:
@@ -566,11 +837,16 @@ def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], d
     warned = sum(1 for r in results if r["status"] == "WARN")
     errored = sum(1 for r in results if r["status"] == "ERROR")
 
+    blocking_count = compute_blocking_violation_count(results, mode)
+
     return {
         "report_id": str(uuid.uuid4()),
         "contract_id": contract_id,
         "snapshot_id": sha256_of_file(data_path),
         "run_timestamp": to_iso_now(),
+        "enforcement_mode": mode,
+        "blocking_violation_count": blocking_count,
+        "would_block_pipeline": blocking_count > 0,
         "total_checks": len(results),
         "passed": passed,
         "failed": failed,
@@ -584,7 +860,7 @@ def main() -> None:
     args = parse_args()
     contract = load_contract(args.contract)
     records = load_jsonl(args.data)
-    report = validate_contract(records, contract, args.data)
+    report = validate_contract(records, contract, args.data, mode=args.mode)
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -594,10 +870,14 @@ def main() -> None:
     print(f"[OK] contract={args.contract}")
     print(f"[OK] data={args.data}")
     print(f"[OK] output={output_path}")
+    print(f"[OK] mode={report['enforcement_mode']} would_block={report['would_block_pipeline']} blocking_violations={report['blocking_violation_count']}")
     print(
         "[OK] summary="
         f"total={report['total_checks']} passed={report['passed']} failed={report['failed']} warned={report['warned']} errored={report['errored']}"
     )
+
+    if args.fail_on_block and report["would_block_pipeline"]:
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
