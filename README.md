@@ -37,8 +37,8 @@ uv run python contracts/generator.py \
 ```bash
 uv run python contracts/runner.py \
   --contract generated_contracts/week3_extractions.yaml \
-  --data outputs/week3/extractions_violated.jsonl \
-  --output validation_reports/violated_run.json
+  --data outputs/week3/extractions.jsonl \
+  --output validation_reports/week3_baseline.json
 ```
 
 ---
@@ -50,13 +50,22 @@ uv run python contracts/runner.py \
 ```bash
 uv run python contracts/runner.py \
   --contract generated_contracts/week5_event_platform_events.yaml \
-  --data outputs/week5/events.jsonl \
+  --data outputs/week5/events_canonical.jsonl \
   --output validation_reports/week5_baseline.json
 ```
 
 ### Violated
 
 ```bash
+
+# Week3
+
+uv run python contracts/runner.py \
+  --contract generated_contracts/week3_extractions.yaml \
+  --data outputs/week3/extractions_violated.jsonl \
+  --output validation_reports/week3_violated.json
+
+# Week5
 uv run python contracts/runner.py \
   --contract generated_contracts/week5_event_platform_events.yaml \
   --data outputs/week5/events_violated.jsonl \
@@ -71,10 +80,10 @@ uv run python contracts/runner.py \
 
 # Week3
 uv run python contracts/attributor.py \
-  --violation validation_reports/violated_run.json \
+  --violation validation_reports/week3_violated.json \
   --lineage outputs/week4/lineage_snapshots_week3.jsonl \
   --contract generated_contracts/week3_extractions.yaml \
-  --output violation_log/violations.jsonl
+  --output violation_log/week3_violations.jsonl
 
   # Week5
 
@@ -82,7 +91,7 @@ uv run python contracts/attributor.py \
   --violation validation_reports/week5_violated.json \
   --lineage outputs/week4/lineage_snapshots_week5.jsonl \
   --contract generated_contracts/week5_event_platform_events.yaml \
-  --output violation_log/violations.jsonl
+  --output violation_log/week5_violations.jsonl
 
 ```
 
@@ -136,16 +145,16 @@ uv run python contracts/ai_extensions.py \
 uv run python contracts/ai_extensions.py \
   --mode all \
   --extractions outputs/week3/extractions.jsonl \
-  --verdicts outputs/week2/verdicts.jsonl \
-  --output validation_reports/ai_extensions.json
+  --verdicts outputs/week2/verdicts_canonical.jsonl \
+  --output validation_reports/week3_ai_extensions.json
 
 # Week#5
 
 uv run python contracts/ai_extensions.py \
   --mode all \
   --extractions outputs/week5/events.jsonl \
-  --verdicts outputs/week2/verdicts.jsonl \
-  --output validation_reports/ai_extensions.json
+  --verdicts outputs/week2/verdicts_canonical.jsonl \
+  --output validation_reports/week5_ai_extensions.json
 
 ```
 
@@ -153,12 +162,24 @@ uv run python contracts/ai_extensions.py \
 
 # 6. Report Generation
 
+## With out AI metrics
+
 ```bash
+
+# Week3
 uv run python contracts/report_generator.py \
   --reports-dir validation_reports \
-  --violations violation_log/violations.jsonl \
+  --violations violation_log/week3_violations.jsonl \
   --schema-evolution validation_reports/schema_evolution_week3.json \
-  --output enforcer_report/report_data.json
+  --output enforcer_report/week3_no_ai_report_data.json
+
+  # Week5
+uv run python contracts/report_generator.py \
+  --reports-dir validation_reports \
+  --violations violation_log/week5_violations.jsonl \
+  --schema-evolution validation_reports/schema_evolution_week5.json \
+  --output enforcer_report/week5_no_ai_report_data.json
+
 ```
 
 ## With AI metrics
@@ -167,21 +188,42 @@ uv run python contracts/report_generator.py \
 # Week3
 uv run python contracts/report_generator.py \
   --reports-dir validation_reports \
-  --violations violation_log/violations.jsonl \
+  --violations violation_log/week3_violations.jsonl \
   --schema-evolution validation_reports/schema_evolution_week3.json \
-  --ai-metrics validation_reports/ai_extensions.json \
-  --output enforcer_report/report_data.json
+  --ai-metrics validation_reports/week3_ai_extensions.json \
+  --output enforcer_report/week3_report_data.json
 
 # Week5
 
 uv run python contracts/report_generator.py \
   --reports-dir validation_reports \
-  --violations violation_log/violations.jsonl \
+  --violations violation_log/week5_violations.jsonl \
   --schema-evolution validation_reports/schema_evolution_week5.json \
-  --ai-metrics validation_reports/ai_extensions.json \
-  --output enforcer_report/report_data.json
+  --ai-metrics validation_reports/week5_ai_extensions.json \
+  --output enforcer_report/week5_report_data.json
 
 ```
+
+---
+
+uv run python contracts/report_generator.py \
+  --baseline-report validation_reports/week3_baseline.json \
+  --violated-report validation_reports/week3_violated.json \
+  --contract-id week3-document-refinery-extractions \
+  --violations violation_log/week3_violations.jsonl \
+  --schema-evolution validation_reports/schema_evolution_week3.json \
+  --ai-metrics validation_reports/week3_ai_extensions.json \
+  --output enforcer_report/week3_report_data.json
+
+
+  uv run python contracts/report_generator.py \
+  --baseline-report validation_reports/week5_baseline.json \
+  --violated-report validation_reports/week5_violated.json \
+  --contract-id week5-event-platform-events \
+  --violations violation_log/week5_violations.jsonl \
+  --schema-evolution validation_reports/schema_evolution_week5.json \
+  --ai-metrics validation_reports/week5_ai_extensions.json \
+  --output enforcer_report/week5_report_data.json
 
 ---
 
