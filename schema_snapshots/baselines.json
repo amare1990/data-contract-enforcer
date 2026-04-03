@@ -1,0 +1,397 @@
+{
+  "written_at": "2026-04-03T19:43:08Z",
+  "columns": {
+    "payload.adverse_action_codes.__len__": {
+      "mean": 1.0,
+      "stddev": 0.0
+    },
+    "payload.amount": {
+      "mean": 38750.0,
+      "stddev": 20830.952244882406
+    },
+    "payload.analysis_duration_ms": {
+      "mean": 6690.126984126984,
+      "stddev": 12617.571185801817
+    },
+    "payload.anomalies.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.anomalies_found": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.anomaly_flags.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.approved_amount_usd": {
+      "mean": 1202750.0,
+      "stddev": 853536.9688202481
+    },
+    "payload.conditions.__len__": {
+      "mean": 0.2553191489361702,
+      "stddev": 0.6067764113089755
+    },
+    "payload.confidence": {
+      "mean": 0.8786,
+      "stddev": 0.06755224735305984
+    },
+    "payload.confidence_score": {
+      "mean": 0.9322448979591836,
+      "stddev": 0.051610129259447406
+    },
+    "payload.context_token_count": {
+      "mean": 1276.8689655172413,
+      "stddev": 800.9451877895372
+    },
+    "payload.contributing_sessions.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.critical_missing_fields.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.decision.confidence": {
+      "mean": 0.7557142857142857,
+      "stddev": 0.053018760934116636
+    },
+    "payload.decision.data_quality_caveats.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.decision.key_concerns.__len__": {
+      "mean": 0.8571428571428571,
+      "stddev": 0.36313651960128146
+    },
+    "payload.decision.policy_overrides_applied.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.decision.recommended_limit_usd": {
+      "mean": 1460071.4285714286,
+      "stddev": 875111.7259910492
+    },
+    "payload.decline_reasons.__len__": {
+      "mean": 1.5,
+      "stddev": 0.5773502691896257
+    },
+    "payload.document_ids_consumed.__len__": {
+      "mean": 2.0,
+      "stddev": 0.0
+    },
+    "payload.documents_processed": {
+      "mean": 3.0,
+      "stddev": 0.0
+    },
+    "payload.duration_ms": {
+      "mean": 1509.1245674740485,
+      "stddev": 2886.7505634602967
+    },
+    "payload.event_replay_from_position": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.events_verified_count": {
+      "mean": 1.0,
+      "stddev": 0.0
+    },
+    "payload.events_written.__len__": {
+      "mean": 1.0,
+      "stddev": 0.0
+    },
+    "payload.events_written[*].stream_position": {
+      "mean": 7.423728813559322,
+      "stddev": 4.378684888860148
+    },
+    "payload.facts.accounts_receivable": {
+      "mean": 1856628.9677777777,
+      "stddev": 1419348.1635725086
+    },
+    "payload.facts.cash_and_equivalents": {
+      "mean": 1652230.4427777778,
+      "stddev": 1488387.640922993
+    },
+    "payload.facts.current_assets": {
+      "mean": 6032343.095,
+      "stddev": 4503606.093527331
+    },
+    "payload.facts.current_liabilities": {
+      "mean": 2794319.9605555553,
+      "stddev": 1801731.5916450734
+    },
+    "payload.facts.current_ratio": {
+      "mean": 2.086666666666667,
+      "stddev": 0.3713912069118338
+    },
+    "payload.facts.debt_to_ebitda": {
+      "mean": 7.236111111111111,
+      "stddev": 5.3825019555581495
+    },
+    "payload.facts.debt_to_equity": {
+      "mean": 0.8683333333333333,
+      "stddev": 0.5463149274914607
+    },
+    "payload.facts.depreciation_amortization": {
+      "mean": 256580.11888888886,
+      "stddev": 172939.026895122
+    },
+    "payload.facts.ebitda": {
+      "mean": 963001.1155555557,
+      "stddev": 738550.7598549229
+    },
+    "payload.facts.extraction_notes.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.facts.field_confidence.net_income": {
+      "mean": 0.8700392025447918,
+      "stddev": 0.03297237389602352
+    },
+    "payload.facts.field_confidence.total_assets": {
+      "mean": 0.9263755776969168,
+      "stddev": 0.02899027526424676
+    },
+    "payload.facts.field_confidence.total_revenue": {
+      "mean": 0.9267920289299073,
+      "stddev": 0.026299726452669637
+    },
+    "payload.facts.gross_margin": {
+      "mean": 0.43333333333333335,
+      "stddev": 0.16262138323638217
+    },
+    "payload.facts.gross_profit": {
+      "mean": 3138925.9944444443,
+      "stddev": 2419387.743533548
+    },
+    "payload.facts.interest_coverage": {
+      "mean": 2.7966666666666664,
+      "stddev": 1.3103500077678265
+    },
+    "payload.facts.interest_expense": {
+      "mean": 288379.7744444444,
+      "stddev": 200097.86621983527
+    },
+    "payload.facts.inventory": {
+      "mean": 1975435.1500000001,
+      "stddev": 1289557.3706658357
+    },
+    "payload.facts.long_term_debt": {
+      "mean": 4035790.6661111107,
+      "stddev": 3004612.90031436
+    },
+    "payload.facts.net_income": {
+      "mean": 315331.08555555553,
+      "stddev": 378537.44153208076
+    },
+    "payload.facts.net_margin": {
+      "mean": 0.049444444444444444,
+      "stddev": 0.04361811186353305
+    },
+    "payload.facts.operating_cash_flow": {
+      "mean": 643682.9705555555,
+      "stddev": 662230.382686287
+    },
+    "payload.facts.operating_income": {
+      "mean": 706420.9933333333,
+      "stddev": 585889.1660628092
+    },
+    "payload.facts.total_assets": {
+      "mean": 14844846.05888889,
+      "stddev": 12795434.085935464
+    },
+    "payload.facts.total_equity": {
+      "mean": 8125914.449999999,
+      "stddev": 7452774.969007403
+    },
+    "payload.facts.total_liabilities": {
+      "mean": 6718931.609444444,
+      "stddev": 6152672.588699364
+    },
+    "payload.facts.total_revenue": {
+      "mean": 7612545.758888889,
+      "stddev": 4980233.652810111
+    },
+    "payload.file_size_bytes": {
+      "mean": 212401.88043478262,
+      "stddev": 100717.81640767735
+    },
+    "payload.fiscal_year": {
+      "mean": 2024.0,
+      "stddev": 0.0
+    },
+    "payload.fiscal_years_loaded.__len__": {
+      "mean": 3.0,
+      "stddev": 0.0
+    },
+    "payload.fiscal_years_loaded[*]": {
+      "mean": 2023.0,
+      "stddev": 0.8263938705413374
+    },
+    "payload.fraud_score": {
+      "mean": 0.23199999999999998,
+      "stddev": 0.29570537138622743
+    },
+    "payload.input_keys.__len__": {
+      "mean": 1.2698961937716262,
+      "stddev": 0.5423951910991573
+    },
+    "payload.inputs_validated.__len__": {
+      "mean": 3.1186440677966103,
+      "stddev": 0.3240565100554841
+    },
+    "payload.interest_rate_pct": {
+      "mean": 7.175000000000001,
+      "stddev": 1.0088442231914039
+    },
+    "payload.key_risks.__len__": {
+      "mean": 0.06976744186046512,
+      "stddev": 0.25776963111323353
+    },
+    "payload.llm_cost_usd": {
+      "mean": 0.01419468,
+      "stddev": 0.0039521921272444825
+    },
+    "payload.llm_tokens_input": {
+      "mean": 2034.56,
+      "stddev": 712.5977717630108
+    },
+    "payload.llm_tokens_output": {
+      "mean": 539.4,
+      "stddev": 218.09711542978732
+    },
+    "payload.loan_term_months": {
+      "mean": 21.642857142857142,
+      "stddev": 23.044958881936196
+    },
+    "payload.matched_rules.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.node_sequence": {
+      "mean": 3.204152249134948,
+      "stddev": 1.7565757887080924
+    },
+    "payload.output_keys.__len__": {
+      "mean": 1.3183391003460208,
+      "stddev": 0.5604970050799607
+    },
+    "payload.overall_confidence": {
+      "mean": 0.8817737965814575,
+      "stddev": 0.04741679689176341
+    },
+    "payload.page_count": {
+      "mean": 3.3333333333333335,
+      "stddev": 1.0954451150103321
+    },
+    "payload.previous_hash": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.processing_ms": {
+      "mean": 5126.694444444444,
+      "stddev": 1643.832209363134
+    },
+    "payload.quality_flag_count": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.raw_text_length": {
+      "mean": 4054.3888888888887,
+      "stddev": 1179.606454416721
+    },
+    "payload.recommended_limit_usd": {
+      "mean": 13265.30612244898,
+      "stddev": 22303.56427999428
+    },
+    "payload.regulatory_basis.__len__": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.requested_amount_usd": {
+      "mean": 923129.0322580645,
+      "stddev": 1322862.612395731
+    },
+    "payload.required_document_types.__len__": {
+      "mean": 3.0,
+      "stddev": 0.0
+    },
+    "payload.required_documents.__len__": {
+      "mean": 3.0,
+      "stddev": 0.0
+    },
+    "payload.rules_evaluated": {
+      "mean": 5.222222222222222,
+      "stddev": 1.5634719199411433
+    },
+    "payload.rules_failed": {
+      "mean": 0.3333333333333333,
+      "stddev": 0.5
+    },
+    "payload.rules_noted": {
+      "mean": 0.7777777777777778,
+      "stddev": 0.44095855184409843
+    },
+    "payload.rules_passed": {
+      "mean": 4.111111111111111,
+      "stddev": 1.536590742882148
+    },
+    "payload.rules_to_evaluate.__len__": {
+      "mean": 6.0,
+      "stddev": 0.0
+    },
+    "payload.screening_duration_ms": {
+      "mean": 0.0,
+      "stddev": 0.0
+    },
+    "payload.tables_extracted": {
+      "mean": 3.8055555555555554,
+      "stddev": 1.0907256940599408
+    },
+    "payload.term": {
+      "mean": 12.0,
+      "stddev": 0.0
+    },
+    "payload.term_months": {
+      "mean": 39.0,
+      "stddev": 15.0996688705415
+    },
+    "payload.tool_duration_ms": {
+      "mean": 3966.78,
+      "stddev": 2829.3742283800325
+    },
+    "payload.total_cost_usd": {
+      "mean": 0.02108050847457627,
+      "stddev": 0.01366836439638146
+    },
+    "payload.total_duration_ms": {
+      "mean": 24517.050847457627,
+      "stddev": 14494.357256766001
+    },
+    "payload.total_llm_calls": {
+      "mean": 0.847457627118644,
+      "stddev": 0.3603099999573133
+    },
+    "payload.total_nodes_executed": {
+      "mean": 5.016949152542373,
+      "stddev": 1.5269664034953532
+    },
+    "payload.total_tokens_used": {
+      "mean": 2378.6949152542375,
+      "stddev": 1350.2074892304647
+    },
+    "payload.validation_duration_ms": {
+      "mean": 134.23728813559322,
+      "stddev": 56.67175783045044
+    },
+    "schema_version": {
+      "mean": 1.0357475909232203,
+      "stddev": 0.18568903806340376
+    },
+    "sequence_number": {
+      "mean": 5.293532338308458,
+      "stddev": 3.1741032934943925
+    }
+  }
+}
