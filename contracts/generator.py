@@ -68,6 +68,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True, help="Path to JSONL source file")
     parser.add_argument("--contract-id", required=True, help="Stable contract identifier")
     parser.add_argument("--lineage", required=False, help="Path to lineage snapshot JSONL")
+    parser.add_argument("--registry", required=False, default="contract_registry/subscriptions.yaml", help="Optional contract registry YAML used to inject downstream subscribers")
     parser.add_argument("--output", required=True, help="Directory for generated contracts")
     parser.add_argument(
         "--owner",
@@ -106,6 +107,42 @@ def load_latest_lineage_snapshot(lineage_path: str | Path | None) -> dict[str, A
         return None
     records = load_jsonl(lineage_path)
     return records[-1] if records else None
+
+
+
+
+def load_registry(path: str | Path | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    p = Path(path)
+    if not p.exists():
+        return None
+    with p.open("r", encoding="utf-8") as f:
+        payload = yaml.safe_load(f) or {}
+    return payload if isinstance(payload, dict) else None
+
+
+def normalize_field_path(value: str) -> str:
+    value = value.replace("[*].", ".")
+    value = value.replace("[*]", "")
+    value = value.replace(".__len__", "")
+    value = re.sub(r"\.+", ".", value)
+    return value.strip(".")
+
+
+def infer_breaking_fields(context: ContractContext, profiles: dict[str, ColumnProfile]) -> list[str]:
+    breaking: list[str] = []
+    for profile in profiles.values():
+        clause = infer_clause(profile)
+        if clause.get("required"):
+            breaking.append(profile.name)
+        if profile.name.endswith("confidence") or profile.name == "confidence":
+            breaking.append(profile.name)
+        if profile.name in {"doc_id", "event_id", "event_type", "aggregate_id", "aggregate_type", "snapshot_id", "id"}:
+            breaking.append(profile.name)
+        if context.logical_name == "events" and profile.name in {"payload", "schema_version", "sequence_number"}:
+            breaking.append(profile.name)
+    return dedupe_preserve_order(normalize_field_path(name) for name in breaking)
 
 
 def infer_context(contract_id: str, source_path: str, owner: str) -> ContractContext:
@@ -694,39 +731,66 @@ def inject_lineage(
     contract: dict[str, Any],
     lineage_snapshot: dict[str, Any] | None,
     context: ContractContext,
+    profiles: dict[str, ColumnProfile],
+    registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if lineage_snapshot is None:
-        contract["lineage"] = {"upstream": [], "downstream": []}
-        return contract
-
-    nodes = lineage_snapshot.get("nodes", [])
-    edges = lineage_snapshot.get("edges", [])
-    source_hints = source_hints_for_context(context)
     downstream: list[dict[str, Any]] = []
+    inferred_breaking_fields = infer_breaking_fields(context, profiles)
 
-    for edge in edges:
-        source = str(edge.get("source", ""))
-        target = str(edge.get("target", ""))
-        if any(hint in source.lower() for hint in source_hints):
+    if registry:
+        for subscription in registry.get("subscriptions", []) or []:
+            if not isinstance(subscription, dict):
+                continue
+            if str(subscription.get("contract_id", "")) != context.contract_id:
+                continue
+            breaking_fields = []
+            for item in subscription.get("breaking_fields", []) or []:
+                if isinstance(item, str):
+                    breaking_fields.append(normalize_field_path(item))
+                elif isinstance(item, dict) and item.get("field"):
+                    breaking_fields.append(normalize_field_path(str(item.get("field"))))
             downstream.append(
                 {
-                    "id": target,
-                    "description": f"Observed downstream consumer of {context.logical_name} from lineage snapshot.",
-                    "fields_consumed": default_fields_consumed(context),
+                    "id": subscription.get("subscriber_id"),
+                    "subscriber_team": subscription.get("subscriber_team"),
+                    "description": f"Registry subscriber for {context.contract_id}.",
+                    "fields_consumed": subscription.get("fields_consumed", default_fields_consumed(context)),
+                    "breaking_if_changed": breaking_fields or inferred_breaking_fields,
+                    "validation_mode": subscription.get("validation_mode"),
+                    "contact": subscription.get("contact"),
                 }
             )
 
-    if not downstream:
-        for node in nodes:
-            node_id = str(node.get("node_id", ""))
-            if any(hint in node_id.lower() for hint in source_hints):
+    if lineage_snapshot is not None:
+        nodes = lineage_snapshot.get("nodes", [])
+        edges = lineage_snapshot.get("edges", [])
+        source_hints = source_hints_for_context(context)
+
+        for edge in edges:
+            source = str(edge.get("source", ""))
+            target = str(edge.get("target", ""))
+            if any(hint in source.lower() for hint in source_hints):
                 downstream.append(
                     {
-                        "id": node_id,
-                        "description": f"Lineage-adjacent node related to {context.logical_name}.",
+                        "id": target,
+                        "description": f"Observed downstream consumer of {context.logical_name} from lineage snapshot.",
                         "fields_consumed": default_fields_consumed(context),
+                        "breaking_if_changed": inferred_breaking_fields,
                     }
                 )
+
+        if not downstream:
+            for node in nodes:
+                node_id = str(node.get("node_id", ""))
+                if any(hint in node_id.lower() for hint in source_hints):
+                    downstream.append(
+                        {
+                            "id": node_id,
+                            "description": f"Lineage-adjacent node related to {context.logical_name}.",
+                            "fields_consumed": default_fields_consumed(context),
+                            "breaking_if_changed": inferred_breaking_fields,
+                        }
+                    )
 
     contract["lineage"] = {
         "upstream": [],
@@ -762,6 +826,7 @@ def build_contract(
     context: ContractContext,
     profiles: dict[str, ColumnProfile],
     lineage_snapshot: dict[str, Any] | None,
+    registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     contract: dict[str, Any] = {
         "kind": "DataContract",
@@ -792,7 +857,7 @@ def build_contract(
     }
 
     add_llm_annotation_placeholder(contract, context, profiles)
-    inject_lineage(contract, lineage_snapshot, context)
+    inject_lineage(contract, lineage_snapshot, context, profiles, registry=registry)
     return contract
 
 
@@ -946,10 +1011,11 @@ def main() -> None:
     args = parse_args()
     records = load_jsonl(args.source)
     lineage_snapshot = load_latest_lineage_snapshot(args.lineage)
+    registry = load_registry(args.registry)
     context = infer_context(args.contract_id, args.source, args.owner)
 
     profiles = build_column_profiles(records)
-    contract = build_contract(context, profiles, lineage_snapshot)
+    contract = build_contract(context, profiles, lineage_snapshot, registry=registry)
     dbt_schema = build_dbt_schema(context, profiles)
 
     contract_path, dbt_path = output_paths(args.output, args.contract_id)

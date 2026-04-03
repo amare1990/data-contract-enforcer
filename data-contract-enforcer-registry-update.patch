@@ -1,0 +1,1729 @@
+--- data-contract-enforcer.orig/README.md	2026-04-03 18:20:46.599438409 +0000
++++ data-contract-enforcer.patched/README.md	2026-04-03 18:28:16.182322714 +0000
+@@ -1,125 +1,152 @@
+ # Data Contract Enforcer — Usage Guide
+ 
+-This repository implements a contract generation, validation, attribution, and reporting pipeline.
++This repository implements contract generation, validation, attribution, schema evolution analysis,
++AI contract extensions, and machine-generated enforcer reporting.
++
++## 0. Contract Registry
++
++The updated implementation includes a YAML contract registry at:
++
++```bash
++contract_registry/subscriptions.yaml
++```
++
++The ViolationAttributor now uses the registry as the **authoritative blast-radius source** and
++uses the Week 4 lineage graph only for contamination-depth enrichment.
+ 
+ ---
+ 
+-# 1. Contract Generation
++## 1. Contract Generation
+ 
+-## Week 3 — Document Refinery
++### Week 3 — Document Refinery
+ 
+ ```bash
+ uv run python contracts/generator.py \
+   --source outputs/week3/extractions.jsonl \
+   --contract-id week3-document-refinery-extractions \
+   --lineage outputs/week4/lineage_snapshots_week3.jsonl \
++  --registry contract_registry/subscriptions.yaml \
+   --output generated_contracts/
+ ```
+ 
+----
+-
+-## Week 5 — Event Platform
++### Week 5 — Event Platform
+ 
+ ```bash
+ uv run python contracts/generator.py \
+   --source outputs/week5/events.jsonl \
+   --contract-id week5-event-platform-events \
+   --lineage outputs/week4/lineage_snapshots_week5.jsonl \
++  --registry contract_registry/subscriptions.yaml \
+   --output generated_contracts/
+ ```
+ 
+ ---
+ 
+-# 2. Validation Runner
++## 2. Validation Runner
++
++The ValidationRunner supports the updated enforcement modes:
+ 
+-## Week 3 (violated example)
++- `AUDIT` — never blocks; records whether the run would have blocked
++- `WARN` — blocks on `CRITICAL`
++- `ENFORCE` — blocks on `CRITICAL` or `HIGH`
++
++### Week 3 baseline (audit)
+ 
+ ```bash
+ uv run python contracts/runner.py \
+   --contract generated_contracts/week3_extractions.yaml \
+   --data outputs/week3/extractions.jsonl \
++  --mode AUDIT \
+   --output validation_reports/week3_baseline.json
+ ```
+ 
+----
++### Week 3 violated (enforce)
+ 
+-## Week 5
++```bash
++uv run python contracts/runner.py \
++  --contract generated_contracts/week3_extractions.yaml \
++  --data outputs/week3/extractions_violated.jsonl \
++  --mode ENFORCE \
++  --output validation_reports/week3_violated.json
++```
+ 
+-### Baseline
++### Week 5 baseline
+ 
+ ```bash
+ uv run python contracts/runner.py \
+   --contract generated_contracts/week5_event_platform_events.yaml \
+   --data outputs/week5/events_canonical.jsonl \
++  --mode AUDIT \
+   --output validation_reports/week5_baseline.json
+ ```
+ 
+-### Violated
++### Week 5 violated
+ 
+ ```bash
+-
+-# Week3
+-
+-uv run python contracts/runner.py \
+-  --contract generated_contracts/week3_extractions.yaml \
+-  --data outputs/week3/extractions_violated.jsonl \
+-  --output validation_reports/week3_violated.json
+-
+-# Week5
+ uv run python contracts/runner.py \
+   --contract generated_contracts/week5_event_platform_events.yaml \
+   --data outputs/week5/events_violated.jsonl \
++  --mode ENFORCE \
+   --output validation_reports/week5_violated.json
+ ```
+ 
++If you want the CLI to exit non-zero when the mode would block the pipeline, add:
++
++```bash
++--fail-on-block
++```
++
+ ---
+ 
+-# 3. Violation Attribution
++## 3. Violation Attribution
+ 
+-```bash
++### Week 3
+ 
+-# Week3
++```bash
+ uv run python contracts/attributor.py \
+   --violation validation_reports/week3_violated.json \
+   --lineage outputs/week4/lineage_snapshots_week3.jsonl \
+   --contract generated_contracts/week3_extractions.yaml \
++  --registry contract_registry/subscriptions.yaml \
+   --output violation_log/week3_violations.jsonl
++```
+ 
+-  # Week5
++### Week 5
+ 
+-  uv run python contracts/attributor.py \
++```bash
++uv run python contracts/attributor.py \
+   --violation validation_reports/week5_violated.json \
+   --lineage outputs/week4/lineage_snapshots_week5.jsonl \
+   --contract generated_contracts/week5_event_platform_events.yaml \
++  --registry contract_registry/subscriptions.yaml \
+   --output violation_log/week5_violations.jsonl
+-
+ ```
+ 
+ ---
+ 
+-# 4. Schema Evolution Analysis
++## 4. Schema Evolution Analysis
+ 
+-```bash
+-
+-# Week3
++### Week 3
+ 
++```bash
+ uv run python contracts/schema_analyzer.py \
+   --contract-id week3-document-refinery-extractions \
+   --output validation_reports/schema_evolution_week3.json
++```
+ 
+-# Week5
++### Week 5
+ 
++```bash
+ uv run python contracts/schema_analyzer.py \
+   --contract-id week5-event-platform-events \
+   --output validation_reports/schema_evolution_week5.json
+-
+ ```
+ 
+ ---
+ 
+-# 5. AI Contract Extensions
++## 5. AI Contract Extensions
+ 
+-## Embedding drift
++### Embedding drift
+ 
+ ```bash
+ uv run python contracts/ai_extensions.py \
+@@ -128,7 +155,7 @@
+   --output validation_reports/ai_extensions_embedding.json
+ ```
+ 
+-## Prompt validation
++### Prompt validation
+ 
+ ```bash
+ uv run python contracts/ai_extensions.py \
+@@ -137,75 +164,31 @@
+   --output validation_reports/ai_extensions_prompt.json
+ ```
+ 
+-## Full AI checks
++### Full AI checks
+ 
+ ```bash
+-
+-# Week3
+ uv run python contracts/ai_extensions.py \
+   --mode all \
+   --extractions outputs/week3/extractions.jsonl \
+   --verdicts outputs/week2/verdicts_canonical.jsonl \
+   --output validation_reports/week3_ai_extensions.json
++```
+ 
+-# Week#5
+-
++```bash
+ uv run python contracts/ai_extensions.py \
+   --mode all \
+   --extractions outputs/week5/events.jsonl \
+   --verdicts outputs/week2/verdicts_canonical.jsonl \
+   --output validation_reports/week5_ai_extensions.json
+-
+ ```
+ 
+ ---
+ 
+-# 6. Report Generation
++## 6. Report Generation
+ 
+-## With out AI metrics
++### Week 3 (explicit, deterministic)
+ 
+ ```bash
+-
+-# Week3
+-uv run python contracts/report_generator.py \
+-  --reports-dir validation_reports \
+-  --violations violation_log/week3_violations.jsonl \
+-  --schema-evolution validation_reports/schema_evolution_week3.json \
+-  --output enforcer_report/week3_no_ai_report_data.json
+-
+-  # Week5
+-uv run python contracts/report_generator.py \
+-  --reports-dir validation_reports \
+-  --violations violation_log/week5_violations.jsonl \
+-  --schema-evolution validation_reports/schema_evolution_week5.json \
+-  --output enforcer_report/week5_no_ai_report_data.json
+-
+-```
+-
+-## With AI metrics
+-
+-```bash
+-# Week3
+-uv run python contracts/report_generator.py \
+-  --reports-dir validation_reports \
+-  --violations violation_log/week3_violations.jsonl \
+-  --schema-evolution validation_reports/schema_evolution_week3.json \
+-  --ai-metrics validation_reports/week3_ai_extensions.json \
+-  --output enforcer_report/week3_report_data.json
+-
+-# Week5
+-
+-uv run python contracts/report_generator.py \
+-  --reports-dir validation_reports \
+-  --violations violation_log/week5_violations.jsonl \
+-  --schema-evolution validation_reports/schema_evolution_week5.json \
+-  --ai-metrics validation_reports/week5_ai_extensions.json \
+-  --output enforcer_report/week5_report_data.json
+-
+-```
+-
+----
+-
+ uv run python contracts/report_generator.py \
+   --baseline-report validation_reports/week3_baseline.json \
+   --violated-report validation_reports/week3_violated.json \
+@@ -214,9 +197,12 @@
+   --schema-evolution validation_reports/schema_evolution_week3.json \
+   --ai-metrics validation_reports/week3_ai_extensions.json \
+   --output enforcer_report/week3_report_data.json
++```
+ 
++### Week 5 (explicit, deterministic)
+ 
+-  uv run python contracts/report_generator.py \
++```bash
++uv run python contracts/report_generator.py \
+   --baseline-report validation_reports/week5_baseline.json \
+   --violated-report validation_reports/week5_violated.json \
+   --contract-id week5-event-platform-events \
+@@ -224,35 +210,29 @@
+   --schema-evolution validation_reports/schema_evolution_week5.json \
+   --ai-metrics validation_reports/week5_ai_extensions.json \
+   --output enforcer_report/week5_report_data.json
++```
+ 
+ ---
+ 
+-# 7. Inspect Outputs
++## 7. Inspect Outputs
+ 
+ ```bash
+-cat violation_log/violations.jsonl
++cat violation_log/week3_violations.jsonl
+ ```
+ 
+-### Pretty print (JSONL-safe)
+-
+ ```bash
+-while read -r line; do echo "$line" | python -m json.tool; done < violation_log/violations.jsonl
++while read -r line; do echo "$line" | python -m json.tool; done < violation_log/week5_violations.jsonl
+ ```
+ 
+-### Check failures
+-
+ ```bash
+-grep -A 8 -B 2 '"status": "FAIL"' validation_reports/violated_run.json
++grep -A 8 -B 2 '"status": "FAIL"' validation_reports/week5_violated.json
+ ```
+ 
+ ---
+ 
+-# Notes
+-
+-* Contracts are generated from real data (Week 3 and Week 5 outputs)
+-* Validation reports are produced from actual runs (not synthetic examples)
+-* Lineage is used for attribution and blast radius analysis
+-* AI extensions cover embedding drift and prompt validation
++## Notes
+ 
+-
+----
++- registry subscriptions are maintained manually in `contract_registry/subscriptions.yaml`
++- generator can inject registry-aware downstream consumers into generated contracts
++- attributor queries the registry first, then enriches with lineage depth
++- runner now records `enforcement_mode`, `blocking_violation_count`, and `would_block_pipeline`
+--- data-contract-enforcer.orig/contracts/attributor.py	2026-04-03 18:20:46.595444955 +0000
++++ data-contract-enforcer.patched/contracts/attributor.py	2026-04-03 18:28:58.547330995 +0000
+@@ -1,21 +1,17 @@
+ #!/usr/bin/env python3
+-"""ViolationAttributor for TRP1 Week 8: Data Contract Enforcer.
++"""ViolationAttributor for the Data Contract Enforcer.
+ 
+-Consumes a validation report, a lineage snapshot, and a generated contract,
+-then writes ranked blame-chain entries to violation_log/violations.jsonl.
+-
+-Example:
+-    uv run python contracts/attributor.py \
+-      --violation validation_reports/violated_run.json \
+-      --lineage outputs/week4/lineage_snapshots.jsonl \
+-      --contract generated_contracts/week3_extractions.yaml \
+-      --output violation_log/violations.jsonl
++Consumes a validation report, a lineage snapshot, a generated contract, and an
++optional contract registry. The registry is treated as the authoritative blast
++radius source; lineage is used as enrichment for transitive contamination and
++upstream file discovery.
+ """
+ 
+ from __future__ import annotations
+ 
+ import argparse
+ import json
++import re
+ import subprocess
+ import uuid
+ from collections import deque
+@@ -33,6 +29,11 @@
+     parser.add_argument("--contract", required=True, help="Path to generated contract YAML")
+     parser.add_argument("--output", required=True, help="Path to violations.jsonl output")
+     parser.add_argument(
++        "--registry",
++        default="contract_registry/subscriptions.yaml",
++        help="Path to contract registry subscriptions YAML (default: contract_registry/subscriptions.yaml)",
++    )
++    parser.add_argument(
+         "--repo-root",
+         default=".",
+         help="Git repository root to use for git log / git blame (default: current directory)",
+@@ -72,18 +73,37 @@
+ 
+ def load_yaml(path: str | Path) -> dict[str, Any]:
+     with Path(path).open("r", encoding="utf-8") as f:
+-        return yaml.safe_load(f)
++        payload = yaml.safe_load(f) or {}
++    if not isinstance(payload, dict):
++        raise ValueError(f"Expected YAML mapping in {path}")
++    return payload
++
++
++def load_registry(path: str | Path) -> dict[str, Any]:
++    p = Path(path)
++    if not p.exists():
++        return {"subscriptions": []}
++    return load_yaml(p)
+ 
+ 
+ def iso_now() -> str:
+     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+ 
+ 
++def normalize_field_path(value: str) -> str:
++    normalized = value.strip()
++    normalized = normalized.replace("[*].", ".")
++    normalized = normalized.replace("[*]", "")
++    normalized = normalized.replace(".__len__", "")
++    normalized = re.sub(r"\.+", ".", normalized)
++    return normalized.strip(".")
++
++
+ def infer_system_hint(check_id: str, contract_id: str) -> str:
+     text = f"{check_id} {contract_id}".lower()
+     if "week1" in text:
+         return "week1"
+-    if "week2" in text:
++    if "week2" in text or "verdict" in text:
+         return "week2"
+     if "week3" in text or "extraction" in text or "refinery" in text:
+         return "week3"
+@@ -96,14 +116,16 @@
+     return contract_id.split("-")[0].lower()
+ 
+ 
+-def build_graph(lineage_snapshot: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, list[str]], dict[str, list[str]]]:
+-    nodes = {str(node.get('node_id')): node for node in lineage_snapshot.get('nodes', []) if node.get('node_id')}
++def build_graph(
++    lineage_snapshot: dict[str, Any],
++) -> tuple[dict[str, dict[str, Any]], dict[str, list[str]], dict[str, list[str]]]:
++    nodes = {str(node.get("node_id")): node for node in lineage_snapshot.get("nodes", []) if node.get("node_id")}
+     reverse_adj: dict[str, list[str]] = {node_id: [] for node_id in nodes}
+     forward_adj: dict[str, list[str]] = {node_id: [] for node_id in nodes}
+ 
+-    for edge in lineage_snapshot.get('edges', []):
+-        source = str(edge.get('source', ''))
+-        target = str(edge.get('target', ''))
++    for edge in lineage_snapshot.get("edges", []):
++        source = str(edge.get("source", ""))
++        target = str(edge.get("target", ""))
+         if source and target:
+             forward_adj.setdefault(source, []).append(target)
+             reverse_adj.setdefault(target, []).append(source)
+@@ -115,13 +137,13 @@
+ 
+ def choose_start_nodes(nodes: dict[str, dict[str, Any]], system_hint: str, column_name: str) -> list[str]:
+     candidates: list[str] = []
+-    lowered_col = column_name.lower()
++    lowered_col = normalize_field_path(column_name).lower()
+     for node_id, node in nodes.items():
+         nid = node_id.lower()
+-        label = str(node.get('label', '')).lower()
+-        path = str(node.get('metadata', {}).get('path', '')).lower()
++        label = str(node.get("label", "")).lower()
++        path = str(node.get("metadata", {}).get("path", "")).lower()
+         haystack = f"{nid} {label} {path}"
+-        if system_hint in haystack or any(tok for tok in lowered_col.split('.') if tok and tok in haystack):
++        if system_hint in haystack or any(tok for tok in lowered_col.split(".") if tok and tok in haystack):
+             candidates.append(node_id)
+     return candidates
+ 
+@@ -146,15 +168,15 @@
+         visited.add(node_id)
+ 
+         node = nodes.get(node_id, {})
+-        metadata = node.get('metadata', {}) if isinstance(node, dict) else {}
+-        node_type = str(node.get('type', ''))
+-        path = metadata.get('path')
++        metadata = node.get("metadata", {}) if isinstance(node, dict) else {}
++        node_type = str(node.get("type", ""))
++        path = metadata.get("path")
+ 
+-        if node_type == 'FILE' and path:
++        if node_type == "FILE" and path:
+             results.append({
+-                'node_id': node_id,
+-                'file_path': str(path),
+-                'lineage_distance': dist,
++                "node_id": node_id,
++                "file_path": str(path),
++                "lineage_distance": dist,
+             })
+ 
+         for upstream in reverse_adj.get(node_id, []):
+@@ -167,13 +189,13 @@
+ def fallback_file_candidates(nodes: dict[str, dict[str, Any]], system_hint: str, max_results: int = 5) -> list[dict[str, Any]]:
+     out: list[dict[str, Any]] = []
+     for node_id, node in nodes.items():
+-        if str(node.get('type')) != 'FILE':
++        if str(node.get("type")) != "FILE":
+             continue
+-        metadata = node.get('metadata', {})
+-        path = str(metadata.get('path', ''))
++        metadata = node.get("metadata", {})
++        path = str(metadata.get("path", ""))
+         haystack = f"{node_id} {path}".lower()
+         if system_hint in haystack:
+-            out.append({'node_id': node_id, 'file_path': path, 'lineage_distance': 1})
++            out.append({"node_id": node_id, "file_path": path, "lineage_distance": 1})
+         if len(out) >= max_results:
+             break
+     return out
+@@ -181,45 +203,38 @@
+ 
+ def parse_git_timestamp(value: str) -> datetime:
+     cleaned = value.strip()
+-    # Handles forms like '2025-01-14 09:00:00 +0000'
+-    return datetime.fromisoformat(cleaned.replace(' +', '+').replace(' -', '-'))
++    return datetime.fromisoformat(cleaned.replace(" +", "+").replace(" -", "-"))
+ 
+ 
+ def run_git_log(repo_root: str | Path, file_path: str, days: int = 14) -> list[dict[str, Any]]:
+     cmd = [
+-        'git',
+-        'log',
+-        '--follow',
+-        f'--since={days} days ago',
+-        '--format=%H|%an|%ae|%ai|%s',
+-        '--',
++        "git",
++        "log",
++        "--follow",
++        f"--since={days} days ago",
++        "--format=%H|%an|%ae|%ai|%s",
++        "--",
+         file_path,
+     ]
+-    result = subprocess.run(
+-        cmd,
+-        cwd=str(repo_root),
+-        capture_output=True,
+-        text=True,
+-        check=False,
+-    )
++    result = subprocess.run(cmd, cwd=str(repo_root), capture_output=True, text=True, check=False)
+     commits: list[dict[str, Any]] = []
+     for line in result.stdout.splitlines():
+-        if '|' not in line:
++        if "|" not in line:
+             continue
+-        commit_hash, author_name, author_email, ts, msg = line.split('|', 4)
++        commit_hash, author_name, author_email, ts, msg = line.split("|", 4)
+         commits.append(
+             {
+-                'commit_hash': commit_hash,
+-                'author': f"{author_name} <{author_email}>",
+-                'commit_timestamp': ts.strip(),
+-                'commit_message': msg.strip(),
++                "commit_hash": commit_hash,
++                "author": f"{author_name} <{author_email}>",
++                "commit_timestamp": ts.strip(),
++                "commit_message": msg.strip(),
+             }
+         )
+     return commits
+ 
+ 
+ def score_commit(commit_timestamp: str, detected_at: str, lineage_distance: int) -> float:
+-    detected_dt = datetime.fromisoformat(detected_at.replace('Z', '+00:00'))
++    detected_dt = datetime.fromisoformat(detected_at.replace("Z", "+00:00"))
+     commit_dt = parse_git_timestamp(commit_timestamp)
+     days_since_commit = abs((detected_dt - commit_dt).days)
+     score = 1.0 - (days_since_commit * 0.1) - (lineage_distance * 0.2)
+@@ -235,33 +250,33 @@
+     blame_chain: list[dict[str, Any]] = []
+ 
+     for candidate in file_candidates:
+-        commits = run_git_log(repo_root, candidate['file_path'])
++        commits = run_git_log(repo_root, candidate["file_path"])
+         if not commits:
+             blame_chain.append(
+                 {
+-                    'rank': len(blame_chain) + 1,
+-                    'file_path': candidate['file_path'],
+-                    'commit_hash': 'UNKNOWN',
+-                    'author': 'UNKNOWN',
+-                    'commit_timestamp': detected_at,
+-                    'commit_message': 'No recent git history found for file.',
+-                    'confidence_score': round(max(0.0, 0.4 - candidate['lineage_distance'] * 0.1), 3),
++                    "rank": len(blame_chain) + 1,
++                    "file_path": candidate["file_path"],
++                    "commit_hash": "UNKNOWN",
++                    "author": "UNKNOWN",
++                    "commit_timestamp": detected_at,
++                    "commit_message": "No recent git history found for file.",
++                    "confidence_score": round(max(0.0, 0.4 - candidate["lineage_distance"] * 0.1), 3),
+                 }
+             )
+         else:
+             for commit in commits[:max_candidates]:
+                 blame_chain.append(
+                     {
+-                        'rank': len(blame_chain) + 1,
+-                        'file_path': candidate['file_path'],
+-                        'commit_hash': commit['commit_hash'],
+-                        'author': commit['author'],
+-                        'commit_timestamp': commit['commit_timestamp'],
+-                        'commit_message': commit['commit_message'],
+-                        'confidence_score': score_commit(
+-                            commit['commit_timestamp'],
++                        "rank": len(blame_chain) + 1,
++                        "file_path": candidate["file_path"],
++                        "commit_hash": commit["commit_hash"],
++                        "author": commit["author"],
++                        "commit_timestamp": commit["commit_timestamp"],
++                        "commit_message": commit["commit_message"],
++                        "confidence_score": score_commit(
++                            commit["commit_timestamp"],
+                             detected_at,
+-                            candidate['lineage_distance'],
++                            candidate["lineage_distance"],
+                         ),
+                     }
+                 )
+@@ -273,19 +288,19 @@
+     if not blame_chain:
+         blame_chain.append(
+             {
+-                'rank': 1,
+-                'file_path': 'UNKNOWN',
+-                'commit_hash': 'UNKNOWN',
+-                'author': 'UNKNOWN',
+-                'commit_timestamp': detected_at,
+-                'commit_message': 'No lineage or git candidate available.',
+-                'confidence_score': 0.0,
++                "rank": 1,
++                "file_path": "UNKNOWN",
++                "commit_hash": "UNKNOWN",
++                "author": "UNKNOWN",
++                "commit_timestamp": detected_at,
++                "commit_message": "No lineage or git candidate available.",
++                "confidence_score": 0.0,
+             }
+         )
+ 
+-    blame_chain = sorted(blame_chain, key=lambda x: x['confidence_score'], reverse=True)[:max_candidates]
++    blame_chain = sorted(blame_chain, key=lambda x: x["confidence_score"], reverse=True)[:max_candidates]
+     for idx, item in enumerate(blame_chain, start=1):
+-        item['rank'] = idx
++        item["rank"] = idx
+     return blame_chain
+ 
+ 
+@@ -294,20 +309,177 @@
+ 
+ 
+ def contract_downstream(contract: dict[str, Any]) -> list[dict[str, Any]]:
+-    return contract.get('lineage', {}).get('downstream', []) or []
++    return contract.get("lineage", {}).get("downstream", []) or []
+ 
+ 
+-def build_blast_radius(contract: dict[str, Any], records_failing: int) -> dict[str, Any]:
++def normalize_breaking_fields(subscription: dict[str, Any]) -> list[dict[str, Any]]:
++    normalized: list[dict[str, Any]] = []
++    for item in subscription.get("breaking_fields", []) or []:
++        if isinstance(item, str):
++            normalized.append({"field": normalize_field_path(item), "reason": ""})
++        elif isinstance(item, dict):
++            normalized.append(
++                {
++                    "field": normalize_field_path(str(item.get("field", ""))),
++                    "reason": str(item.get("reason", "")),
++                }
++            )
++    return [item for item in normalized if item["field"]]
++
++
++def query_registry(
++    registry: dict[str, Any],
++    contract_id: str,
++    breaking_field: str,
++) -> list[dict[str, Any]]:
++    matches: list[dict[str, Any]] = []
++    normalized_breaking_field = normalize_field_path(breaking_field)
++
++    for raw_sub in registry.get("subscriptions", []) or []:
++        if not isinstance(raw_sub, dict):
++            continue
++        if str(raw_sub.get("contract_id", "")) != contract_id:
++            continue
++        breaking_fields = normalize_breaking_fields(raw_sub)
++        if not breaking_fields:
++            continue
++        reasons = [
++            item
++            for item in breaking_fields
++            if item["field"] == normalized_breaking_field
++            or item["field"].endswith(f".{normalized_breaking_field}")
++            or normalized_breaking_field.endswith(f".{item["field"]}")
++        ]
++        if reasons:
++            enriched = dict(raw_sub)
++            enriched["breaking_fields"] = breaking_fields
++            enriched["matched_breaking_field"] = normalized_breaking_field
++            enriched["match_reason"] = reasons[0].get("reason", "")
++            matches.append(enriched)
++
++    return matches
++
++
++def fallback_blast_radius_from_contract(contract: dict[str, Any], records_failing: int, breaking_field: str) -> dict[str, Any]:
+     downstream = contract_downstream(contract)
+     return {
+-        'affected_nodes': [d.get('id') for d in downstream if d.get('id')],
+-        'affected_pipelines': [d.get('id') for d in downstream if 'pipeline' in str(d.get('id', '')).lower()],
+-        'estimated_records': records_failing,
++        "source": "contract_lineage",
++        "breaking_field": normalize_field_path(breaking_field),
++        "affected_subscribers": [
++            {
++                "subscriber_id": d.get("id"),
++                "subscriber_team": d.get("subscriber_team"),
++                "fields_consumed": d.get("fields_consumed", []),
++                "validation_mode": d.get("validation_mode"),
++                "contact": d.get("contact"),
++                "contamination_depth": 0,
++            }
++            for d in downstream
++            if d.get("id")
++        ],
++        "affected_nodes": [d.get("id") for d in downstream if d.get("id")],
++        "affected_pipelines": [d.get("id") for d in downstream if "pipeline" in str(d.get("id", "")).lower()],
++        "estimated_records": records_failing,
++        "registry_match_count": 0,
+     }
+ 
+ 
++def choose_subscriber_nodes(nodes: dict[str, dict[str, Any]], subscriber_id: str) -> list[str]:
++    target = subscriber_id.lower()
++    tokens = [tok for tok in re.split(r"[-_]+", target) if tok and tok != "team"]
++    matches: list[str] = []
++    for node_id, node in nodes.items():
++        haystack = " ".join(
++            [
++                node_id.lower(),
++                str(node.get("label", "")).lower(),
++                str(node.get("metadata", {}).get("path", "")).lower(),
++                str(node.get("metadata", {}).get("purpose", "")).lower(),
++            ]
++        )
++        if target in haystack or sum(tok in haystack for tok in tokens) >= min(2, len(tokens)):
++            matches.append(node_id)
++    return matches[:5]
++
++
++def enrich_with_lineage(
++    blast_radius: dict[str, Any],
++    nodes: dict[str, dict[str, Any]],
++    forward_adj: dict[str, list[str]],
++) -> dict[str, Any]:
++    affected_nodes: set[str] = set(blast_radius.get("affected_nodes", []))
++    contamination_depths: dict[str, int] = {}
++
++    for subscriber in blast_radius.get("affected_subscribers", []):
++        seed_nodes = choose_subscriber_nodes(nodes, str(subscriber.get("subscriber_id", "")))
++        if not seed_nodes:
++            subscriber["contamination_depth"] = 0
++            continue
++
++        queue: deque[tuple[str, int]] = deque((node_id, 0) for node_id in seed_nodes)
++        visited: set[str] = set()
++        max_depth = 0
++        while queue:
++            node_id, depth = queue.popleft()
++            if node_id in visited:
++                continue
++            visited.add(node_id)
++            max_depth = max(max_depth, depth)
++            affected_nodes.add(node_id)
++            contamination_depths[node_id] = min(depth, contamination_depths.get(node_id, depth))
++            for downstream in forward_adj.get(node_id, []):
++                if downstream not in visited:
++                    queue.append((downstream, depth + 1))
++        subscriber["contamination_depth"] = max_depth
++
++    blast_radius["affected_nodes"] = sorted(affected_nodes)
++    blast_radius["contamination_depth"] = max(contamination_depths.values(), default=0)
++    blast_radius["affected_pipelines"] = sorted(
++        node_id for node_id in affected_nodes if "pipeline" in node_id.lower()
++    )
++    return blast_radius
++
++
++def build_blast_radius(
++    contract: dict[str, Any],
++    contract_id: str,
++    failure: dict[str, Any],
++    registry: dict[str, Any],
++    nodes: dict[str, dict[str, Any]],
++    forward_adj: dict[str, list[str]],
++) -> dict[str, Any]:
++    records_failing = int(failure.get("records_failing", 0) or 0)
++    breaking_field = normalize_field_path(str(failure.get("column_name", "unknown_field")))
++    matches = query_registry(registry, contract_id, breaking_field)
++
++    if matches:
++        blast_radius = {
++            "source": "registry",
++            "breaking_field": breaking_field,
++            "affected_subscribers": [
++                {
++                    "subscriber_id": sub.get("subscriber_id"),
++                    "subscriber_team": sub.get("subscriber_team"),
++                    "fields_consumed": sub.get("fields_consumed", []),
++                    "validation_mode": sub.get("validation_mode"),
++                    "contact": sub.get("contact"),
++                    "reason": sub.get("match_reason", ""),
++                }
++                for sub in matches
++            ],
++            "affected_nodes": [],
++            "affected_pipelines": [],
++            "estimated_records": records_failing,
++            "registry_match_count": len(matches),
++        }
++    else:
++        blast_radius = fallback_blast_radius_from_contract(contract, records_failing, breaking_field)
++
++    return enrich_with_lineage(blast_radius, nodes, forward_adj)
++
++
+ def select_failures(validation_report: dict[str, Any]) -> list[dict[str, Any]]:
+-    return [result for result in validation_report.get('results', []) if result.get('status') == 'FAIL']
++    return [result for result in validation_report.get("results", []) if result.get("status") == "FAIL"]
+ 
+ 
+ def attribute_failure(
+@@ -315,16 +487,17 @@
+     validation_report: dict[str, Any],
+     lineage_snapshot: dict[str, Any],
+     contract: dict[str, Any],
++    registry: dict[str, Any],
+     repo_root: str | Path,
+     max_candidates: int,
+ ) -> dict[str, Any]:
+-    contract_id = validation_report.get('contract_id', contract.get('id', 'unknown_contract'))
+-    check_id = str(failure.get('check_id', 'unknown_check'))
+-    detected_at = validation_report.get('run_timestamp') or iso_now()
+-    column_name = str(failure.get('column_name', 'unknown_column'))
++    contract_id = validation_report.get("contract_id", contract.get("id", "unknown_contract"))
++    check_id = str(failure.get("check_id", "unknown_check"))
++    detected_at = validation_report.get("run_timestamp") or iso_now()
++    column_name = str(failure.get("column_name", "unknown_column"))
+     system_hint = infer_system_hint(check_id, contract_id)
+ 
+-    nodes, reverse_adj, _ = build_graph(lineage_snapshot)
++    nodes, reverse_adj, forward_adj = build_graph(lineage_snapshot)
+     start_nodes = choose_start_nodes(nodes, system_hint, column_name)
+     file_candidates = bfs_upstream_files(start_nodes, nodes, reverse_adj, max_results=max_candidates)
+     if not file_candidates:
+@@ -333,20 +506,22 @@
+     blame_chain = ensure_candidate_floor(file_candidates, repo_root, detected_at, max_candidates)
+ 
+     return {
+-        'violation_id': str(uuid.uuid4()),
+-        'check_id': check_id,
+-        'detected_at': detected_at,
+-        'blame_chain': blame_chain,
+-        'blast_radius': build_blast_radius(contract, int(failure.get('records_failing', 0) or 0)),
++        "violation_id": str(uuid.uuid4()),
++        "contract_id": contract_id,
++        "check_id": check_id,
++        "failing_field": normalize_field_path(column_name),
++        "detected_at": detected_at,
++        "blame_chain": blame_chain,
++        "blast_radius": build_blast_radius(contract, contract_id, failure, registry, nodes, forward_adj),
+     }
+ 
+ 
+ def write_jsonl(path: str | Path, rows: list[dict[str, Any]]) -> None:
+     path = Path(path)
+     path.parent.mkdir(parents=True, exist_ok=True)
+-    with path.open('w', encoding='utf-8') as f:
++    with path.open("w", encoding="utf-8") as f:
+         for row in rows:
+-            f.write(json.dumps(row, ensure_ascii=False) + '\n')
++            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+ 
+ 
+ def main() -> None:
+@@ -354,6 +529,7 @@
+     validation_report = load_json(args.violation)
+     lineage_snapshot = load_latest_lineage_snapshot(args.lineage)
+     contract = load_yaml(args.contract)
++    registry = load_registry(args.registry)
+ 
+     failures = select_failures(validation_report)
+     attributed: list[dict[str, Any]] = []
+@@ -364,19 +540,21 @@
+                 validation_report,
+                 lineage_snapshot,
+                 contract,
++                registry,
+                 args.repo_root,
+                 args.max_candidates,
+             )
+         )
+ 
+     if not attributed:
+-        print('[OK] no FAIL results found in validation report; nothing to attribute')
++        print("[OK] no FAIL results found in validation report; nothing to attribute")
+         return
+ 
+     write_jsonl(args.output, attributed)
+     print(f"[OK] failures_attributed={len(attributed)}")
++    print(f"[OK] registry_path={args.registry}")
+     print(f"[OK] output={args.output}")
+ 
+ 
+-if __name__ == '__main__':
++if __name__ == "__main__":
+     main()
+--- data-contract-enforcer.orig/contracts/generator.py	2026-04-03 18:20:46.598740773 +0000
++++ data-contract-enforcer.patched/contracts/generator.py	2026-04-03 18:26:46.963554784 +0000
+@@ -68,6 +68,7 @@
+     parser.add_argument("--source", required=True, help="Path to JSONL source file")
+     parser.add_argument("--contract-id", required=True, help="Stable contract identifier")
+     parser.add_argument("--lineage", required=False, help="Path to lineage snapshot JSONL")
++    parser.add_argument("--registry", required=False, default="contract_registry/subscriptions.yaml", help="Optional contract registry YAML used to inject downstream subscribers")
+     parser.add_argument("--output", required=True, help="Directory for generated contracts")
+     parser.add_argument(
+         "--owner",
+@@ -108,6 +109,42 @@
+     return records[-1] if records else None
+ 
+ 
++
++
++def load_registry(path: str | Path | None) -> dict[str, Any] | None:
++    if not path:
++        return None
++    p = Path(path)
++    if not p.exists():
++        return None
++    with p.open("r", encoding="utf-8") as f:
++        payload = yaml.safe_load(f) or {}
++    return payload if isinstance(payload, dict) else None
++
++
++def normalize_field_path(value: str) -> str:
++    value = value.replace("[*].", ".")
++    value = value.replace("[*]", "")
++    value = value.replace(".__len__", "")
++    value = re.sub(r"\.+", ".", value)
++    return value.strip(".")
++
++
++def infer_breaking_fields(context: ContractContext, profiles: dict[str, ColumnProfile]) -> list[str]:
++    breaking: list[str] = []
++    for profile in profiles.values():
++        clause = infer_clause(profile)
++        if clause.get("required"):
++            breaking.append(profile.name)
++        if profile.name.endswith("confidence") or profile.name == "confidence":
++            breaking.append(profile.name)
++        if profile.name in {"doc_id", "event_id", "event_type", "aggregate_id", "aggregate_type", "snapshot_id", "id"}:
++            breaking.append(profile.name)
++        if context.logical_name == "events" and profile.name in {"payload", "schema_version", "sequence_number"}:
++            breaking.append(profile.name)
++    return dedupe_preserve_order(normalize_field_path(name) for name in breaking)
++
++
+ def infer_context(contract_id: str, source_path: str, owner: str) -> ContractContext:
+     sp = source_path.replace("\\", "/")
+ 
+@@ -694,40 +731,67 @@
+     contract: dict[str, Any],
+     lineage_snapshot: dict[str, Any] | None,
+     context: ContractContext,
++    profiles: dict[str, ColumnProfile],
++    registry: dict[str, Any] | None = None,
+ ) -> dict[str, Any]:
+-    if lineage_snapshot is None:
+-        contract["lineage"] = {"upstream": [], "downstream": []}
+-        return contract
+-
+-    nodes = lineage_snapshot.get("nodes", [])
+-    edges = lineage_snapshot.get("edges", [])
+-    source_hints = source_hints_for_context(context)
+     downstream: list[dict[str, Any]] = []
++    inferred_breaking_fields = infer_breaking_fields(context, profiles)
+ 
+-    for edge in edges:
+-        source = str(edge.get("source", ""))
+-        target = str(edge.get("target", ""))
+-        if any(hint in source.lower() for hint in source_hints):
++    if registry:
++        for subscription in registry.get("subscriptions", []) or []:
++            if not isinstance(subscription, dict):
++                continue
++            if str(subscription.get("contract_id", "")) != context.contract_id:
++                continue
++            breaking_fields = []
++            for item in subscription.get("breaking_fields", []) or []:
++                if isinstance(item, str):
++                    breaking_fields.append(normalize_field_path(item))
++                elif isinstance(item, dict) and item.get("field"):
++                    breaking_fields.append(normalize_field_path(str(item.get("field"))))
+             downstream.append(
+                 {
+-                    "id": target,
+-                    "description": f"Observed downstream consumer of {context.logical_name} from lineage snapshot.",
+-                    "fields_consumed": default_fields_consumed(context),
++                    "id": subscription.get("subscriber_id"),
++                    "subscriber_team": subscription.get("subscriber_team"),
++                    "description": f"Registry subscriber for {context.contract_id}.",
++                    "fields_consumed": subscription.get("fields_consumed", default_fields_consumed(context)),
++                    "breaking_if_changed": breaking_fields or inferred_breaking_fields,
++                    "validation_mode": subscription.get("validation_mode"),
++                    "contact": subscription.get("contact"),
+                 }
+             )
+ 
+-    if not downstream:
+-        for node in nodes:
+-            node_id = str(node.get("node_id", ""))
+-            if any(hint in node_id.lower() for hint in source_hints):
++    if lineage_snapshot is not None:
++        nodes = lineage_snapshot.get("nodes", [])
++        edges = lineage_snapshot.get("edges", [])
++        source_hints = source_hints_for_context(context)
++
++        for edge in edges:
++            source = str(edge.get("source", ""))
++            target = str(edge.get("target", ""))
++            if any(hint in source.lower() for hint in source_hints):
+                 downstream.append(
+                     {
+-                        "id": node_id,
+-                        "description": f"Lineage-adjacent node related to {context.logical_name}.",
++                        "id": target,
++                        "description": f"Observed downstream consumer of {context.logical_name} from lineage snapshot.",
+                         "fields_consumed": default_fields_consumed(context),
++                        "breaking_if_changed": inferred_breaking_fields,
+                     }
+                 )
+ 
++        if not downstream:
++            for node in nodes:
++                node_id = str(node.get("node_id", ""))
++                if any(hint in node_id.lower() for hint in source_hints):
++                    downstream.append(
++                        {
++                            "id": node_id,
++                            "description": f"Lineage-adjacent node related to {context.logical_name}.",
++                            "fields_consumed": default_fields_consumed(context),
++                            "breaking_if_changed": inferred_breaking_fields,
++                        }
++                    )
++
+     contract["lineage"] = {
+         "upstream": [],
+         "downstream": dedupe_downstream(downstream),
+@@ -762,6 +826,7 @@
+     context: ContractContext,
+     profiles: dict[str, ColumnProfile],
+     lineage_snapshot: dict[str, Any] | None,
++    registry: dict[str, Any] | None = None,
+ ) -> dict[str, Any]:
+     contract: dict[str, Any] = {
+         "kind": "DataContract",
+@@ -792,7 +857,7 @@
+     }
+ 
+     add_llm_annotation_placeholder(contract, context, profiles)
+-    inject_lineage(contract, lineage_snapshot, context)
++    inject_lineage(contract, lineage_snapshot, context, profiles, registry=registry)
+     return contract
+ 
+ 
+@@ -946,10 +1011,11 @@
+     args = parse_args()
+     records = load_jsonl(args.source)
+     lineage_snapshot = load_latest_lineage_snapshot(args.lineage)
++    registry = load_registry(args.registry)
+     context = infer_context(args.contract_id, args.source, args.owner)
+ 
+     profiles = build_column_profiles(records)
+-    contract = build_contract(context, profiles, lineage_snapshot)
++    contract = build_contract(context, profiles, lineage_snapshot, registry=registry)
+     dbt_schema = build_dbt_schema(context, profiles)
+ 
+     contract_path, dbt_path = output_paths(args.output, args.contract_id)
+--- data-contract-enforcer.orig/contracts/runner.py	2026-04-03 18:20:46.599140933 +0000
++++ data-contract-enforcer.patched/contracts/runner.py	2026-04-03 18:25:04.883939632 +0000
+@@ -40,9 +40,35 @@
+     parser.add_argument("--contract", required=True, help="Path to contract YAML")
+     parser.add_argument("--data", required=True, help="Path to JSONL data file")
+     parser.add_argument("--output", required=True, help="Path to validation report JSON")
++    parser.add_argument("--mode", choices=["AUDIT", "WARN", "ENFORCE"], default="AUDIT", help="Enforcement mode (default: AUDIT)")
++    parser.add_argument("--fail-on-block", action="store_true", help="Exit non-zero when the selected mode would block the pipeline")
+     return parser.parse_args()
+ 
+ 
++
++
++def blocking_severities_for_mode(mode: str) -> set[str]:
++    normalized = mode.upper()
++    if normalized == "WARN":
++        return {"CRITICAL"}
++    if normalized == "ENFORCE":
++        return {"CRITICAL", "HIGH"}
++    return set()
++
++
++def compute_blocking_violation_count(results: list[dict[str, Any]], mode: str) -> int:
++    blocking_severities = blocking_severities_for_mode(mode)
++    if not blocking_severities:
++        return 0
++    count = 0
++    for result in results:
++        if result.get("status") not in {"FAIL", "ERROR"}:
++            continue
++        if str(result.get("severity", "")).upper() in blocking_severities:
++            count += 1
++    return count
++
++
+ def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
+     path = Path(path)
+     if not path.exists():
+@@ -760,7 +786,7 @@
+     return results
+ 
+ 
+-def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], data_path: str | Path) -> dict[str, Any]:
++def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], data_path: str | Path, mode: str = "AUDIT") -> dict[str, Any]:
+     contract_id = contract.get("id", "unknown_contract")
+     contract_schema = contract.get("schema", {})
+     results: list[dict[str, Any]] = []
+@@ -811,11 +837,16 @@
+     warned = sum(1 for r in results if r["status"] == "WARN")
+     errored = sum(1 for r in results if r["status"] == "ERROR")
+ 
++    blocking_count = compute_blocking_violation_count(results, mode)
++
+     return {
+         "report_id": str(uuid.uuid4()),
+         "contract_id": contract_id,
+         "snapshot_id": sha256_of_file(data_path),
+         "run_timestamp": to_iso_now(),
++        "enforcement_mode": mode,
++        "blocking_violation_count": blocking_count,
++        "would_block_pipeline": blocking_count > 0,
+         "total_checks": len(results),
+         "passed": passed,
+         "failed": failed,
+@@ -829,7 +860,7 @@
+     args = parse_args()
+     contract = load_contract(args.contract)
+     records = load_jsonl(args.data)
+-    report = validate_contract(records, contract, args.data)
++    report = validate_contract(records, contract, args.data, mode=args.mode)
+ 
+     output_path = Path(args.output)
+     output_path.parent.mkdir(parents=True, exist_ok=True)
+@@ -839,11 +870,15 @@
+     print(f"[OK] contract={args.contract}")
+     print(f"[OK] data={args.data}")
+     print(f"[OK] output={output_path}")
++    print(f"[OK] mode={report['enforcement_mode']} would_block={report['would_block_pipeline']} blocking_violations={report['blocking_violation_count']}")
+     print(
+         "[OK] summary="
+         f"total={report['total_checks']} passed={report['passed']} failed={report['failed']} warned={report['warned']} errored={report['errored']}"
+     )
+ 
++    if args.fail_on_block and report["would_block_pipeline"]:
++        raise SystemExit(2)
++
+ 
+ if __name__ == "__main__":
+     main()
+--- /dev/null	2026-04-03 18:18:10.097684466 +0000
++++ data-contract-enforcer.patched/contract_registry/subscriptions.yaml	2026-04-03 18:27:17.105657609 +0000
+@@ -0,0 +1,71 @@
++# Minimum viable contract registry for the Data Contract Enforcer.
++# Consumers register the exact contract + fields they depend on.
++subscriptions:
++  - contract_id: week3-document-refinery-extractions
++    subscriber_id: week4-cartographer
++    subscriber_team: week4
++    fields_consumed: [doc_id, extracted_facts, extraction_model]
++    breaking_fields:
++      - field: extracted_facts.confidence
++        reason: used for node ranking; scale change breaks ranking logic
++      - field: doc_id
++        reason: primary key for node identity in lineage graph
++    validation_mode: ENFORCE
++    registered_at: '2025-01-10T09:00:00Z'
++    contact: week4-team@org.com
++
++  - contract_id: week4-brownfield-cartographer-lineage
++    subscriber_id: week7-enforcer
++    subscriber_team: week7
++    fields_consumed: [snapshot_id, git_commit, nodes, edges]
++    breaking_fields:
++      - field: edges.source
++        reason: lineage traversal requires resolvable edge endpoints
++      - field: edges.target
++        reason: lineage traversal requires resolvable edge endpoints
++      - field: git_commit
++        reason: git attribution depends on stable commit identifiers
++    validation_mode: ENFORCE
++    registered_at: '2025-01-10T09:05:00Z'
++    contact: week7-team@org.com
++
++  - contract_id: week5-event-platform-events
++    subscriber_id: week7-enforcer
++    subscriber_team: week7
++    fields_consumed: [event_id, event_type, aggregate_id, payload, schema_version]
++    breaking_fields:
++      - field: event_type
++        reason: payload schema lookup is keyed by registered event type
++      - field: payload
++        reason: event payload must validate against the event schema
++      - field: schema_version
++        reason: compatibility checks and migrations are version-aware
++    validation_mode: ENFORCE
++    registered_at: '2025-01-10T09:10:00Z'
++    contact: week7-team@org.com
++
++  - contract_id: langsmith-trace-records
++    subscriber_id: week7-ai-extension
++    subscriber_team: week7
++    fields_consumed: [id, run_type, inputs, outputs, total_tokens]
++    breaking_fields:
++      - field: run_type
++        reason: trace schema validation depends on the allowed enum set
++      - field: total_tokens
++        reason: token accounting check requires prompt and completion token totals
++    validation_mode: AUDIT
++    registered_at: '2025-01-10T09:15:00Z'
++    contact: week7-team@org.com
++
++  - contract_id: week2-digital-courtroom-verdicts
++    subscriber_id: week7-ai-extension
++    subscriber_team: week7
++    fields_consumed: [verdict_id, overall_verdict, overall_score, confidence]
++    breaking_fields:
++      - field: overall_verdict
++        reason: output schema violation rate tracks the contract enum values
++      - field: confidence
++        reason: downstream AI reliability checks assume 0.0-1.0 confidence scale
++    validation_mode: AUDIT
++    registered_at: '2025-01-10T09:20:00Z'
++    contact: week7-team@org.com
+--- data-contract-enforcer.orig/generated_contracts/week3_extractions.yaml	2026-04-03 18:20:46.589145126 +0000
++++ data-contract-enforcer.patched/generated_contracts/week3_extractions.yaml	2026-04-03 18:29:34.722205155 +0000
+@@ -69,6 +69,18 @@
+ lineage:
+   upstream: []
+   downstream:
++  - id: week4-cartographer
++    subscriber_team: week4
++    description: Registry subscriber for week3-document-refinery-extractions.
++    fields_consumed:
++    - doc_id
++    - extracted_facts
++    - extraction_model
++    breaking_if_changed:
++    - extracted_facts.confidence
++    - doc_id
++    validation_mode: ENFORCE
++    contact: week4-team@org.com
+   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20
+     description: Observed downstream consumer of extractions from lineage snapshot.
+     fields_consumed:
+@@ -76,6 +88,14 @@
+     - extracted_facts
+     - entities
+     - extraction_model
++    breaking_if_changed: &id001
++    - confidence
++    - content_hash
++    - doc_id
++    - ldu_id
++    - page_number
++    - source_path
++    - text
+   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40
+     description: Observed downstream consumer of extractions from lineage snapshot.
+     fields_consumed:
+@@ -83,6 +103,7 @@
+     - extracted_facts
+     - entities
+     - extraction_model
++    breaking_if_changed: *id001
+   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69
+     description: Observed downstream consumer of extractions from lineage snapshot.
+     fields_consumed:
+@@ -90,6 +111,7 @@
+     - extracted_facts
+     - entities
+     - extraction_model
++    breaking_if_changed: *id001
+   - id: py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82
+     description: Observed downstream consumer of extractions from lineage snapshot.
+     fields_consumed:
+@@ -97,3 +119,4 @@
+     - extracted_facts
+     - entities
+     - extraction_model
++    breaking_if_changed: *id001
+--- data-contract-enforcer.orig/generated_contracts/week5_event_platform_events.yaml	2026-04-03 18:20:46.589515321 +0000
++++ data-contract-enforcer.patched/generated_contracts/week5_event_platform_events.yaml	2026-04-03 18:29:36.995871460 +0000
+@@ -1140,6 +1140,21 @@
+ lineage:
+   upstream: []
+   downstream:
++  - id: week7-enforcer
++    subscriber_team: week7
++    description: Registry subscriber for week5-event-platform-events.
++    fields_consumed:
++    - event_id
++    - event_type
++    - aggregate_id
++    - payload
++    - schema_version
++    breaking_if_changed:
++    - event_type
++    - payload
++    - schema_version
++    validation_mode: ENFORCE
++    contact: week7-team@org.com
+   - id: py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1148,6 +1163,21 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: &id001
++    - aggregate_id
++    - aggregate_type
++    - event_id
++    - event_type
++    - metadata
++    - occurred_at
++    - payload
++    - payload.confidence
++    - payload.decision.confidence
++    - payload.facts.field_confidence
++    - payload.overall_confidence
++    - recorded_at
++    - schema_version
++    - sequence_number
+   - id: py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1156,6 +1186,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1164,6 +1195,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/conftest.py::call::27
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1172,6 +1204,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1180,6 +1213,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: sql::../../Week 5/ledger-event-store/src/schema.sql
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1188,6 +1222,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1196,6 +1231,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1204,6 +1240,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1212,6 +1249,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1220,6 +1258,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1228,6 +1267,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1236,6 +1276,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/event_store.py::call::305
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1244,6 +1285,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version
+       BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))
+@@ -1254,6 +1296,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1262,6 +1305,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1270,6 +1314,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1278,6 +1323,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1286,6 +1332,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1294,6 +1341,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1302,6 +1350,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1310,6 +1359,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1318,6 +1368,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1326,6 +1377,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1334,6 +1386,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/event_store.py::call::75
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1342,6 +1395,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/event_store.py::call::156
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1350,6 +1404,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/event_store.py::call::167
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1358,6 +1413,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1366,6 +1422,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1374,6 +1431,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1382,6 +1440,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1390,6 +1449,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1398,6 +1458,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1406,6 +1467,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1414,6 +1476,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1422,6 +1485,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1430,6 +1494,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1438,6 +1503,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1446,6 +1512,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1454,6 +1521,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1462,6 +1530,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1470,6 +1539,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1478,6 +1548,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1486,6 +1557,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1494,6 +1566,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1502,6 +1575,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1510,6 +1584,7 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+   - id: py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84
+     description: Observed downstream consumer of events from lineage snapshot.
+     fields_consumed:
+@@ -1518,3 +1593,4 @@
+     - aggregate_id
+     - payload
+     - schema_version
++    breaking_if_changed: *id001
+--- data-contract-enforcer.orig/violation_log/week3_violations.jsonl	2026-04-03 18:20:46.590337712 +0000
++++ data-contract-enforcer.patched/violation_log/week3_violations.jsonl	2026-04-03 18:29:38.675348627 +0000
+@@ -1 +1 @@
+-{"violation_id": "e94aac7f-ef0f-4699-9750-02ff55f02e70", "check_id": "week3-document-refinery-extractions.confidence.range", "detected_at": "2026-04-03T17:05:53Z", "blame_chain": [{"rank": 1, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:05:53Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 2, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:05:53Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 3, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::57", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:05:53Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 4, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:05:53Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 5, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:05:53Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}], "blast_radius": {"affected_nodes": ["py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20", "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40", "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69", "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82"], "affected_pipelines": [], "estimated_records": 8545}}
++{"violation_id": "63efbee4-ad51-4739-ac8b-bf7c346b1a0c", "contract_id": "week3-document-refinery-extractions", "check_id": "week3-document-refinery-extractions.confidence.range", "failing_field": "confidence", "detected_at": "2026-04-03T17:10:17Z", "blame_chain": [{"rank": 1, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:10:17Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 2, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:10:17Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 3, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::57", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:10:17Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 4, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:10:17Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}, {"rank": 5, "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:10:17Z", "commit_message": "No recent git history found for file.", "confidence_score": 0.4}], "blast_radius": {"source": "registry", "breaking_field": "confidence", "affected_subscribers": [{"subscriber_id": "week4-cartographer", "subscriber_team": "week4", "fields_consumed": ["doc_id", "extracted_facts", "extraction_model"], "validation_mode": "ENFORCE", "contact": "week4-team@org.com", "reason": "used for node ranking; scale change breaks ranking logic", "contamination_depth": 0}], "affected_nodes": [], "affected_pipelines": [], "estimated_records": 8545, "registry_match_count": 1, "contamination_depth": 0}}
+--- data-contract-enforcer.orig/violation_log/week5_violations.jsonl	2026-04-03 18:20:46.590030846 +0000
++++ data-contract-enforcer.patched/violation_log/week5_violations.jsonl	2026-04-03 18:29:40.377488317 +0000
+@@ -1,3 +1,3 @@
+-{"violation_id": "fff23e90-af10-43cb-b42c-20fb6be5670b", "check_id": "week5-event-platform-events.sequence_number.type", "detected_at": "2026-04-03T17:06:51Z", "blame_chain": [{"rank": 1, "file_path": "UNKNOWN", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:06:51Z", "commit_message": "No lineage or git candidate available.", "confidence_score": 0.0}], "blast_radius": {"affected_nodes": ["py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "sql::../../Week 5/ledger-event-store/src/schema.sql", "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84"], "affected_pipelines": [], "estimated_records": 1}}
+-{"violation_id": "ced095e3-6a72-49ca-97a5-f5bc6170756a", "check_id": "week5-event-platform-events.quality.recorded_at_gte_occurred_at", "detected_at": "2026-04-03T17:06:51Z", "blame_chain": [{"rank": 1, "file_path": "UNKNOWN", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:06:51Z", "commit_message": "No lineage or git candidate available.", "confidence_score": 0.0}], "blast_radius": {"affected_nodes": ["py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "sql::../../Week 5/ledger-event-store/src/schema.sql", "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84"], "affected_pipelines": [], "estimated_records": 1}}
+-{"violation_id": "2fe19e30-00ea-445c-b7ca-7d6530322c1a", "check_id": "week5-event-platform-events.quality.sequence_monotonic_per_aggregate", "detected_at": "2026-04-03T17:06:51Z", "blame_chain": [{"rank": 1, "file_path": "UNKNOWN", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:06:51Z", "commit_message": "No lineage or git candidate available.", "confidence_score": 0.0}], "blast_radius": {"affected_nodes": ["py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "sql::../../Week 5/ledger-event-store/src/schema.sql", "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84"], "affected_pipelines": [], "estimated_records": 1}}
++{"violation_id": "00374d96-c664-4ac5-af46-9f7d12323070", "contract_id": "week5-event-platform-events", "check_id": "week5-event-platform-events.sequence_number.type", "failing_field": "sequence_number", "detected_at": "2026-04-03T17:06:51Z", "blame_chain": [{"rank": 1, "file_path": "UNKNOWN", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:06:51Z", "commit_message": "No lineage or git candidate available.", "confidence_score": 0.0}], "blast_radius": {"source": "contract_lineage", "breaking_field": "sequence_number", "affected_subscribers": [{"subscriber_id": "week7-enforcer", "subscriber_team": "week7", "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": "ENFORCE", "contact": "week7-team@org.com", "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "sql::../../Week 5/ledger-event-store/src/schema.sql", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 1}, {"subscriber_id": "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 1}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}], "affected_nodes": ["../../Week 5/ledger-event-store/scripts/reset_projections.sql", "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::143", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::144", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84", "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "sql::../../Week 5/ledger-event-store/src/schema.sql", "week7-enforcer"], "affected_pipelines": [], "estimated_records": 1, "registry_match_count": 0, "contamination_depth": 0}}
++{"violation_id": "d44f06bd-f850-4f38-be83-d9ba1857a31c", "contract_id": "week5-event-platform-events", "check_id": "week5-event-platform-events.quality.recorded_at_gte_occurred_at", "failing_field": "recorded_at,occurred_at", "detected_at": "2026-04-03T17:06:51Z", "blame_chain": [{"rank": 1, "file_path": "UNKNOWN", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:06:51Z", "commit_message": "No lineage or git candidate available.", "confidence_score": 0.0}], "blast_radius": {"source": "contract_lineage", "breaking_field": "recorded_at,occurred_at", "affected_subscribers": [{"subscriber_id": "week7-enforcer", "subscriber_team": "week7", "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": "ENFORCE", "contact": "week7-team@org.com", "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "sql::../../Week 5/ledger-event-store/src/schema.sql", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 1}, {"subscriber_id": "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 1}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}], "affected_nodes": ["../../Week 5/ledger-event-store/scripts/reset_projections.sql", "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::143", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::144", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84", "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "sql::../../Week 5/ledger-event-store/src/schema.sql", "week7-enforcer"], "affected_pipelines": [], "estimated_records": 1, "registry_match_count": 0, "contamination_depth": 0}}
++{"violation_id": "8b688ac4-ca70-4a32-888c-906a4319ff95", "contract_id": "week5-event-platform-events", "check_id": "week5-event-platform-events.quality.sequence_monotonic_per_aggregate", "failing_field": "aggregate_id,sequence_number", "detected_at": "2026-04-03T17:06:51Z", "blame_chain": [{"rank": 1, "file_path": "UNKNOWN", "commit_hash": "UNKNOWN", "author": "UNKNOWN", "commit_timestamp": "2026-04-03T17:06:51Z", "commit_message": "No lineage or git candidate available.", "confidence_score": 0.0}], "blast_radius": {"source": "contract_lineage", "breaking_field": "aggregate_id,sequence_number", "affected_subscribers": [{"subscriber_id": "week7-enforcer", "subscriber_team": "week7", "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": "ENFORCE", "contact": "week7-team@org.com", "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "sql::../../Week 5/ledger-event-store/src/schema.sql", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 1}, {"subscriber_id": "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 1}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}, {"subscriber_id": "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84", "subscriber_team": null, "fields_consumed": ["event_id", "event_type", "aggregate_id", "payload", "schema_version"], "validation_mode": null, "contact": null, "contamination_depth": 0}], "affected_nodes": ["../../Week 5/ledger-event-store/scripts/reset_projections.sql", "event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB))", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::143", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::144", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193", "py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20", "py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23", "py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24", "py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23", "py::../../Week 5/ledger-event-store/src/event_store.py::call::156", "py::../../Week 5/ledger-event-store/src/event_store.py::call::167", "py::../../Week 5/ledger-event-store/src/event_store.py::call::305", "py::../../Week 5/ledger-event-store/src/event_store.py::call::75", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57", "py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67", "py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50", "py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88", "py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84", "py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14", "py::../../Week 5/ledger-event-store/tests/conftest.py::call::27", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85", "py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28", "py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35", "py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21", "py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27", "sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql", "sql::../../Week 5/ledger-event-store/src/schema.sql", "week7-enforcer"], "affected_pipelines": [], "estimated_records": 1, "registry_match_count": 0, "contamination_depth": 0}}

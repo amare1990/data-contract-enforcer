@@ -40,7 +40,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contract", required=True, help="Path to contract YAML")
     parser.add_argument("--data", required=True, help="Path to JSONL data file")
     parser.add_argument("--output", required=True, help="Path to validation report JSON")
+    parser.add_argument("--mode", choices=["AUDIT", "WARN", "ENFORCE"], default="AUDIT", help="Enforcement mode (default: AUDIT)")
+    parser.add_argument("--fail-on-block", action="store_true", help="Exit non-zero when the selected mode would block the pipeline")
     return parser.parse_args()
+
+
+
+
+def blocking_severities_for_mode(mode: str) -> set[str]:
+    normalized = mode.upper()
+    if normalized == "WARN":
+        return {"CRITICAL"}
+    if normalized == "ENFORCE":
+        return {"CRITICAL", "HIGH"}
+    return set()
+
+
+def compute_blocking_violation_count(results: list[dict[str, Any]], mode: str) -> int:
+    blocking_severities = blocking_severities_for_mode(mode)
+    if not blocking_severities:
+        return 0
+    count = 0
+    for result in results:
+        if result.get("status") not in {"FAIL", "ERROR"}:
+            continue
+        if str(result.get("severity", "")).upper() in blocking_severities:
+            count += 1
+    return count
 
 
 def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -760,7 +786,7 @@ def run_quality_checks(records: list[dict[str, Any]], contract: dict[str, Any]) 
     return results
 
 
-def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], data_path: str | Path) -> dict[str, Any]:
+def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], data_path: str | Path, mode: str = "AUDIT") -> dict[str, Any]:
     contract_id = contract.get("id", "unknown_contract")
     contract_schema = contract.get("schema", {})
     results: list[dict[str, Any]] = []
@@ -811,11 +837,16 @@ def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], d
     warned = sum(1 for r in results if r["status"] == "WARN")
     errored = sum(1 for r in results if r["status"] == "ERROR")
 
+    blocking_count = compute_blocking_violation_count(results, mode)
+
     return {
         "report_id": str(uuid.uuid4()),
         "contract_id": contract_id,
         "snapshot_id": sha256_of_file(data_path),
         "run_timestamp": to_iso_now(),
+        "enforcement_mode": mode,
+        "blocking_violation_count": blocking_count,
+        "would_block_pipeline": blocking_count > 0,
         "total_checks": len(results),
         "passed": passed,
         "failed": failed,
@@ -829,7 +860,7 @@ def main() -> None:
     args = parse_args()
     contract = load_contract(args.contract)
     records = load_jsonl(args.data)
-    report = validate_contract(records, contract, args.data)
+    report = validate_contract(records, contract, args.data, mode=args.mode)
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -839,10 +870,14 @@ def main() -> None:
     print(f"[OK] contract={args.contract}")
     print(f"[OK] data={args.data}")
     print(f"[OK] output={output_path}")
+    print(f"[OK] mode={report['enforcement_mode']} would_block={report['would_block_pipeline']} blocking_violations={report['blocking_violation_count']}")
     print(
         "[OK] summary="
         f"total={report['total_checks']} passed={report['passed']} failed={report['failed']} warned={report['warned']} errored={report['errored']}"
     )
+
+    if args.fail_on_block and report["would_block_pipeline"]:
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
