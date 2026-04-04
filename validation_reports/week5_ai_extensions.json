@@ -2,28 +2,29 @@
   "run_date": "2026-04-04",
   "mode": "all",
   "embedding_drift": {
-    "status": "PASS",
+    "status": "BASELINE_SET",
     "drift_score": 0.0,
     "threshold": 0.15,
     "sample_size": 200,
-    "interpretation": "stable",
+    "interpretation": "Baseline created from current embedding centroid.",
     "backend": "local-hash"
   },
   "prompt_input_validation": {
-    "status": "PASS",
-    "total_records": 8545,
-    "valid": 8545,
-    "quarantined": 0,
+    "status": "FAIL",
+    "total_records": 3217,
+    "valid": 436,
+    "quarantined": 2781,
     "quarantine_path": "outputs/quarantine/quarantine.jsonl",
     "schema": "draft-07"
   },
   "output_schema": {
-    "status": "PASS",
+    "status": "WARN",
     "total_outputs": 41,
-    "schema_violations": 0,
-    "violation_rate": 0.0,
+    "schema_violations": 1,
+    "violation_rate": 0.0244,
     "trend": "unknown",
     "baseline_violation_rate": null,
-    "warn_threshold": 0.02
+    "warn_threshold": 0.02,
+    "violation_log_entry_written": "violation_log/week5-event-platform-events_violations.jsonl"
   }
 }

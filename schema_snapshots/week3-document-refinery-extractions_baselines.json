@@ -1,13 +1,67 @@
 {
-  "written_at": "2026-04-04T09:24:13Z",
+  "written_at": "2026-04-04T10:05:37Z",
   "columns": {
     "confidence": {
-      "mean": 0.8511410181392627,
-      "stddev": 0.007466961195625639
+      "mean": 85.11410181392627,
+      "stddev": 0.7466961195625632
     },
     "page_number": {
       "mean": 86.39040374488005,
       "stddev": 40.00753032627078
+    }
+  },
+  "week3-document-refinery-extractions": {
+    "contract_id": "week3-document-refinery-extractions",
+    "source_path": "outputs/week3/extractions.jsonl",
+    "generated_at": "2026-04-04T10:06:31Z",
+    "numeric_columns": {
+      "confidence": {
+        "mean": 0.851141,
+        "stddev": 0.007467,
+        "min": 0.85,
+        "max": 0.9,
+        "p25": 0.85,
+        "p50": 0.85,
+        "p75": 0.85,
+        "p95": 0.85,
+        "p99": 0.9,
+        "suspicious_distribution": null,
+        "observed_count": 8545,
+        "record_count": 8545,
+        "null_fraction": 0.0
+      },
+      "page_number": {
+        "mean": 86.390404,
+        "stddev": 40.005189,
+        "min": 3.0,
+        "max": 161.0,
+        "p25": 57.0,
+        "p50": 84.0,
+        "p75": 120.0,
+        "p95": 149.0,
+        "p99": 158.0,
+        "suspicious_distribution": null,
+        "observed_count": 8545,
+        "record_count": 8545,
+        "null_fraction": 0.0
+      }
+    },
+    "confidence_fields": {
+      "confidence": {
+        "mean": 0.851141,
+        "stddev": 0.007467,
+        "min": 0.85,
+        "max": 0.9,
+        "p25": 0.85,
+        "p50": 0.85,
+        "p75": 0.85,
+        "p95": 0.85,
+        "p99": 0.9,
+        "suspicious_distribution": null,
+        "observed_count": 8545,
+        "record_count": 8545,
+        "null_fraction": 0.0
+      }
     }
   }
 }

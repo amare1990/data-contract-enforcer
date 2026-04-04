@@ -11,14 +11,12 @@ The updated implementation includes a YAML contract registry at:
 contract_registry/subscriptions.yaml
 ```
 
-The ViolationAttributor now uses the registry as the **authoritative blast-radius source** and
-uses the Week 4 lineage graph only for contamination-depth enrichment.
-
 ---
+
 
 ## 1. Contract Generation
 
-### Week 3 — Document Refinery
+### Week 3
 
 ```bash
 uv run python contracts/generator.py \
@@ -29,7 +27,7 @@ uv run python contracts/generator.py \
   --output generated_contracts/
 ```
 
-### Week 5 — Event Platform
+### Week 5
 
 ```bash
 uv run python contracts/generator.py \
@@ -40,29 +38,27 @@ uv run python contracts/generator.py \
   --output generated_contracts/
 ```
 
+👉 This step also generates statistical baseline artifacts:
+
+```
+schema_snapshots/<contract_id>_baselines.json
+```
+
 ---
 
 ## 2. Validation Runner
 
-The ValidationRunner supports the updated enforcement modes:
-
-- `AUDIT` — never blocks; records whether the run would have blocked
-- `WARN` — blocks on `CRITICAL`
-- `ENFORCE` — blocks on `CRITICAL` or `HIGH`
-
-### Week 3 baseline (audit)
+### Week 3
 
 ```bash
+# Baseline
 uv run python contracts/runner.py \
   --contract generated_contracts/week3_extractions.yaml \
   --data outputs/week3/extractions.jsonl \
   --mode AUDIT \
   --output validation_reports/week3_baseline.json
-```
 
-### Week 3 violated (enforce)
-
-```bash
+# Violated
 uv run python contracts/runner.py \
   --contract generated_contracts/week3_extractions.yaml \
   --data outputs/week3/extractions_violated.jsonl \
@@ -70,19 +66,19 @@ uv run python contracts/runner.py \
   --output validation_reports/week3_violated.json
 ```
 
-### Week 5 baseline
+---
+
+### Week 5
 
 ```bash
+# Baseline
 uv run python contracts/runner.py \
   --contract generated_contracts/week5_event_platform_events.yaml \
   --data outputs/week5/events_canonical.jsonl \
   --mode AUDIT \
   --output validation_reports/week5_baseline.json
-```
 
-### Week 5 violated
-
-```bash
+# Violated
 uv run python contracts/runner.py \
   --contract generated_contracts/week5_event_platform_events.yaml \
   --data outputs/week5/events_violated.jsonl \
@@ -90,15 +86,11 @@ uv run python contracts/runner.py \
   --output validation_reports/week5_violated.json
 ```
 
-If you want the CLI to exit non-zero when the mode would block the pipeline, add:
-
-```bash
---fail-on-block
-```
-
 ---
 
-## 3. Violation Attribution
+## 3. Violation Attribution (REQUIRED)
+
+This step converts validation failures into **blame chains + blast radius**.
 
 ### Week 3
 
@@ -108,7 +100,7 @@ uv run python contracts/attributor.py \
   --lineage outputs/week4/lineage_snapshots_week3.jsonl \
   --contract generated_contracts/week3_extractions.yaml \
   --registry contract_registry/subscriptions.yaml \
-  --output violation_log/week3_violations.jsonl
+  --output violation_log/week3-document-refinery-extractions_violations.jsonl
 ```
 
 ### Week 5
@@ -119,7 +111,7 @@ uv run python contracts/attributor.py \
   --lineage outputs/week4/lineage_snapshots_week5.jsonl \
   --contract generated_contracts/week5_event_platform_events.yaml \
   --registry contract_registry/subscriptions.yaml \
-  --output violation_log/week5_violations.jsonl
+  --output violation_log/week5-event-platform-events_violations.jsonl
 ```
 
 ---
@@ -146,71 +138,79 @@ uv run python contracts/schema_analyzer.py \
 
 ## 5. AI Contract Extensions
 
-### Embedding drift
-
-```bash
-uv run python contracts/ai_extensions.py \
-  --mode embedding \
-  --extractions outputs/week3/extractions.jsonl \
-  --output validation_reports/ai_extensions_embedding.json
-```
-
-### Prompt validation
-
-```bash
-uv run python contracts/ai_extensions.py \
-  --mode prompt \
-  --extractions outputs/week3/extractions.jsonl \
-  --output validation_reports/ai_extensions_prompt.json
-```
-
-### Full AI checks
+### Week 3
 
 ```bash
 uv run python contracts/ai_extensions.py \
   --mode all \
   --extractions outputs/week3/extractions.jsonl \
   --verdicts outputs/week2/verdicts_canonical.jsonl \
+  --contract-id week3-document-refinery-extractions \
   --output validation_reports/week3_ai_extensions.json
 ```
+
+### Week 5
 
 ```bash
 uv run python contracts/ai_extensions.py \
   --mode all \
   --extractions outputs/week5/events.jsonl \
   --verdicts outputs/week2/verdicts_canonical.jsonl \
+  --contract-id week5-event-platform-events \
   --output validation_reports/week5_ai_extensions.json
+```
+
+👉 This step may append WARN entries to:
+
+```
+violation_log/<contract_id>_violations.jsonl
 ```
 
 ---
 
 ## 6. Report Generation
 
-### Week 3 (explicit, deterministic)
+### Week 3
 
 ```bash
 uv run python contracts/report_generator.py \
   --baseline-report validation_reports/week3_baseline.json \
   --violated-report validation_reports/week3_violated.json \
   --contract-id week3-document-refinery-extractions \
-  --violations violation_log/week3_violations.jsonl \
+  --violations violation_log/week3-document-refinery-extractions_violations.jsonl \
   --schema-evolution validation_reports/schema_evolution_week3.json \
   --ai-metrics validation_reports/week3_ai_extensions.json \
   --output enforcer_report/week3_report_data.json
 ```
 
-### Week 5 (explicit, deterministic)
+### Week 5
 
 ```bash
 uv run python contracts/report_generator.py \
   --baseline-report validation_reports/week5_baseline.json \
   --violated-report validation_reports/week5_violated.json \
   --contract-id week5-event-platform-events \
-  --violations violation_log/week5_violations.jsonl \
+  --violations violation_log/week5-event-platform-events_violations.jsonl \
   --schema-evolution validation_reports/schema_evolution_week5.json \
   --ai-metrics validation_reports/week5_ai_extensions.json \
   --output enforcer_report/week5_report_data.json
 ```
+
+---
+
+## 🔍 Artifact Roles (Important)
+
+| Artifact                                     | Purpose                           |
+| -------------------------------------------- | --------------------------------- |
+| `generated_contracts/*.yaml`                 | Contract definitions              |
+| `schema_snapshots/*_baselines.json`          | Statistical baselines (generator) |
+| `validation_reports/*_baseline.json`         | Clean validation run              |
+| `validation_reports/*_violated.json`         | Failure run                       |
+| `violation_log/*.jsonl`                      | Attribution + AI warnings         |
+| `validation_reports/schema_evolution_*.json` | Schema diff + migration           |
+| `validation_reports/*_ai_extensions.json`    | AI metrics                        |
+| `enforcer_report/*.json`                     | Final machine-generated report    |
+
 
 ---
 

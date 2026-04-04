@@ -1,8 +1,8 @@
 {
-  "report_id": "63df55e9-efb7-472d-81c9-2252e107ad0d",
+  "report_id": "62747a59-7445-4d8d-a949-3f137bd79500",
   "contract_id": "week3-document-refinery-extractions",
   "snapshot_id": "0e65990f44db2d219a67ff0a58c6eb9642f9db34f56c909d151d140bee07873a",
-  "run_timestamp": "2026-04-04T09:25:24Z",
+  "run_timestamp": "2026-04-04T10:05:37Z",
   "enforcement_mode": "ENFORCE",
   "blocking_violation_count": 2,
   "would_block_pipeline": true,
