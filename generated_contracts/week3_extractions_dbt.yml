@@ -1,6 +1,6 @@
 version: 2
 models:
-- name: extractions_breaking
+- name: extractions
   description: One record per processed document. Each record contains extracted facts,
     entity references, processing metadata, and lineage-relevant identifiers.
   columns:
