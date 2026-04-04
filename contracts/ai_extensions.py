@@ -104,8 +104,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--violation-log",
-        default="violation_log/violations.jsonl",
-        help="Path to append AI-generated WARN violations",
+        default=None,
+        help="Optional override path. If not provided, uses violation_log/<contract_id>_violations.jsonl",
     )
     return parser.parse_args()
 
@@ -459,8 +459,13 @@ def append_ai_warn_violation(
     *,
     contract_id: str,
     output_schema_result: dict[str, Any],
-    violation_log_path: str | Path,
+    violation_log_path: str | Path | None,
 ) -> str:
+    if violation_log_path:
+        path = Path(violation_log_path)
+    else:
+        path = Path("violation_log") / f"{contract_id}_violations.jsonl"
+
     entry = {
         "violation_id": str(uuid.uuid4()),
         "contract_id": contract_id,
@@ -481,10 +486,11 @@ def append_ai_warn_violation(
         "source": "contracts/ai_extensions.py",
     }
 
-    path = Path(violation_log_path)
     ensure_parent(path)
+
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
     return str(path)
 
 

@@ -2,11 +2,11 @@
   "run_date": "2026-04-04",
   "mode": "all",
   "embedding_drift": {
-    "status": "BASELINE_SET",
+    "status": "PASS",
     "drift_score": 0.0,
     "threshold": 0.15,
     "sample_size": 200,
-    "interpretation": "Baseline created from current embedding centroid.",
+    "interpretation": "stable",
     "backend": "local-hash"
   },
   "prompt_input_validation": {
@@ -25,6 +25,6 @@
     "trend": "unknown",
     "baseline_violation_rate": null,
     "warn_threshold": 0.02,
-    "violation_log_entry_written": "violation_log/violations.jsonl"
+    "violation_log_entry_written": "violation_log/week3-document-refinery-extractions_violations.jsonl"
   }
 }
