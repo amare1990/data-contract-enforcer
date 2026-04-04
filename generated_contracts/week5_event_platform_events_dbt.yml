@@ -148,7 +148,8 @@ models:
   - name: payload.conditions
     description: Auto-generated column contract.
   - name: payload.conditions.__len__
-    description: Observed list length during profiling.
+    description: 'Distribution note: upper-tail outlier concentration detected. Observed
+      list length during profiling.'
     tests:
     - dbt_utils.expression_is_true:
         expression: payload.conditions.__len__ >= 0
@@ -300,7 +301,7 @@ models:
   - name: payload.documents_processed
     description: Auto-generated column contract.
   - name: payload.duration_ms
-    description: Auto-generated column contract.
+    description: 'Distribution note: heavy-tailed numeric distribution detected.'
   - name: payload.effective_date
     description: Low-cardinality categorical field inferred from observed data.
     tests:
@@ -541,7 +542,8 @@ models:
   - name: payload.key_risks
     description: Auto-generated column contract.
   - name: payload.key_risks.__len__
-    description: Observed list length during profiling.
+    description: 'Distribution note: variance is disproportionately high relative
+      to mean. Observed list length during profiling.'
     tests:
     - dbt_utils.expression_is_true:
         expression: payload.key_risks.__len__ >= 0
@@ -696,7 +698,7 @@ models:
   - name: payload.remediation_description
     description: Auto-generated column contract.
   - name: payload.requested_amount_usd
-    description: Auto-generated column contract.
+    description: 'Distribution note: heavy-tailed numeric distribution detected.'
   - name: payload.requested_at
     description: Auto-generated column contract.
   - name: payload.requested_by

@@ -4,11 +4,11 @@
 Aggregates validation reports, violation logs, schema evolution outputs, and AI metrics
 into a machine-generated Enforcer Report JSON.
 
-Key improvements over the earlier version:
-- avoids accidental cross-run mixing by supporting explicit baseline/violated report inputs
-- supports optional contract_id filtering when scanning a directory
-- includes AI status in overall health score
-- makes scoring more interpretable and less dominated by stale directory contents
+Enhancements over the earlier version:
+- recommendations reference concrete contract file paths and exact checks/fields
+- narratives are driven directly by validation failures, violation log entries, schema report, and AI metrics
+- supports contract-scoped violation logs such as violation_log/<contract_id>_violations.jsonl
+- keeps report output deterministic and explainable
 """
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--violations",
-        default="violation_log/violations.jsonl",
-        help="Path to attributed violations JSONL",
+        default=None,
+        help="Path to attributed violations JSONL. If omitted, attempts violation_log/<contract_id>_violations.jsonl before fallback.",
     )
     parser.add_argument(
         "--schema-evolution",
@@ -101,7 +101,7 @@ def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
     with p.open("r", encoding="utf-8") as f:
         for line_no, raw in enumerate(f, start=1):
             line = raw.strip()
-            if not line:
+            if not line or line.startswith("#"):
                 continue
             try:
                 obj = json.loads(line)
@@ -162,6 +162,22 @@ def choose_reports(args: argparse.Namespace) -> list[dict[str, Any]]:
     return load_validation_reports(args.reports_dir, contract_id=args.contract_id)
 
 
+def resolve_violation_log_path(args: argparse.Namespace, reports: list[dict[str, Any]]) -> Path:
+    if args.violations:
+        return Path(args.violations)
+
+    contract_id = args.contract_id
+    if not contract_id and reports:
+        contract_id = str(reports[0].get("contract_id") or "")
+
+    if contract_id:
+        candidate = Path("violation_log") / f"{contract_id}_violations.jsonl"
+        if candidate.exists():
+            return candidate
+
+    return Path("violation_log/violations.jsonl")
+
+
 def flatten_failures(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
     failures: list[dict[str, Any]] = []
     for report in reports:
@@ -205,14 +221,16 @@ def summarize_schema_changes(schema_report: dict[str, Any] | None) -> dict[str, 
             {
                 "field_name": change.get("field_name"),
                 "verdict": change.get("verdict"),
+                "severity": change.get("severity"),
                 "rationale": change.get("rationale"),
-                "consumer_failure_mode": change.get("consumer_failure_mode"),
+                "consumer_failure_modes": change.get("consumer_failure_modes", []),
             }
         )
 
     return {
         "compatibility_verdict": schema_report.get("compatibility_verdict", "UNKNOWN"),
         "change_count": len(changes),
+        "critical_change_count": schema_report.get("critical_change_count", 0),
         "summary": summary,
         "migration_checklist": schema_report.get("migration_checklist", []),
         "rollback_plan": schema_report.get("rollback_plan", []),
@@ -320,18 +338,13 @@ def compute_health_score(
     return max(0, min(100, score))
 
 
-def plain_language_violation(item: dict[str, Any]) -> str:
-    contract_id = str(item.get("contract_id", "unknown system"))
-    column = str(item.get("column_name", "unknown field"))
-    check_type = str(item.get("check_type", "validation"))
-    expected = str(item.get("expected", "unknown expectation"))
-    actual = str(item.get("actual_value", "unknown actual value"))
-    records = item.get("records_failing", "unknown")
-    return (
-        f"The system {contract_id} failed the {check_type} check on field '{column}'. "
-        f"Expected {expected}, but observed {actual}. "
-        f"This issue impacts {records} records and should be treated as a downstream reliability risk."
-    )
+def contract_yaml_path(contract_id: str) -> str:
+    safe_name = contract_id.replace("-", "_")
+    return f"generated_contracts/{safe_name}.yaml"
+
+
+def contract_clause_reference(check_id: str, column: str) -> str:
+    return f"check '{check_id}' on field '{column}'"
 
 
 def top_violations(failures: list[dict[str, Any]], n: int = 3) -> list[dict[str, Any]]:
@@ -345,50 +358,127 @@ def top_violations(failures: list[dict[str, Any]], n: int = 3) -> list[dict[str,
     return ranked[:n]
 
 
-def health_narrative(score: int, failures: list[dict[str, Any]], ai_summary: dict[str, Any]) -> str:
+def format_violation_description(item: dict[str, Any]) -> str:
+    contract_id = str(item.get("contract_id", "unknown-system"))
+    column = str(item.get("column_name", item.get("field_name", "unknown_field")))
+    check_id = str(item.get("check_id", item.get("check_type", "unknown_check")))
+    expected = str(item.get("expected", item.get("warn_threshold", "expected contract condition")))
+    actual = str(item.get("actual_value", item.get("metric_value", "unknown actual value")))
+    records = item.get("records_failing", item.get("schema_violations", "unknown"))
+    return (
+        f"Contract {contract_id} violated {contract_clause_reference(check_id, column)}. "
+        f"Expected '{expected}', observed '{actual}', affecting {records} records/outputs. "
+        f"Review {contract_yaml_path(contract_id)} before the next run."
+    )
+
+
+def merge_failure_and_violation_signals(
+    failures: list[dict[str, Any]],
+    violations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged = list(failures)
+
+    for violation in violations:
+        merged.append(
+            {
+                "contract_id": violation.get("contract_id"),
+                "column_name": violation.get("column_name") or violation.get("field_name") or violation.get("metric_name"),
+                "check_id": violation.get("check_id"),
+                "severity": violation.get("severity", "WARN"),
+                "expected": violation.get("expected") or violation.get("warn_threshold"),
+                "actual_value": violation.get("actual_value") or violation.get("metric_value"),
+                "records_failing": violation.get("records_failing") or violation.get("schema_violations") or 1,
+                "report_path": violation.get("source"),
+            }
+        )
+
+    return merged
+
+
+def health_narrative(
+    score: int,
+    failures: list[dict[str, Any]],
+    violations: list[dict[str, Any]],
+    ai_summary: dict[str, Any],
+    schema_summary: dict[str, Any],
+) -> str:
     critical_count = sum(1 for f in failures if f.get("severity") == "CRITICAL")
     ai_status = str(ai_summary.get("status", "UNKNOWN"))
+    schema_verdict = str(schema_summary.get("compatibility_verdict", "UNKNOWN"))
+    violation_count = len(violations)
 
-    if score >= 90:
-        return f"Data health score is {score}/100. The monitored system is currently stable with no immediate critical remediation required."
+    if score >= 90 and violation_count == 0 and ai_status in {"PASS", "UNKNOWN"}:
+        return f"Data health score is {score}/100. No significant validation, schema, or AI issues were observed in the supplied artifacts."
+
     if ai_status == "FAIL":
-        return f"Data health score is {score}/100. Core validation may be functioning, but AI-specific risk controls are failing and require immediate remediation."
+        return (
+            f"Data health score is {score}/100. AI-specific risk controls are failing, and the violation log indicates "
+            f"{violation_count} contract issues requiring immediate remediation before deployment."
+        )
+
     if critical_count > 0:
-        return f"Data health score is {score}/100. There are {critical_count} critical violations requiring immediate engineering action."
-    return f"Data health score is {score}/100. The system is operational but has validation debt that should be addressed before production rollout."
+        return (
+            f"Data health score is {score}/100. There are {critical_count} critical validation failures and "
+            f"{violation_count} logged contract violations requiring immediate engineering action."
+        )
+
+    if schema_verdict == "BREAKING":
+        return (
+            f"Data health score is {score}/100. Schema evolution is marked BREAKING; deployment should wait until the "
+            f"migration checklist has been completed for impacted subscribers."
+        )
+
+    return (
+        f"Data health score is {score}/100. The system remains operational, but validation, schema, or AI contract "
+        f"signals in the supplied artifacts indicate remediation is needed before production rollout."
+    )
 
 
 def derive_recommendations(
     failures: list[dict[str, Any]],
+    violations: list[dict[str, Any]],
     schema_summary: dict[str, Any],
     ai_summary: dict[str, Any],
 ) -> list[str]:
     recommendations: list[str] = []
 
-    ranked = top_violations(failures, n=5)
+    ranked = top_violations(merge_failure_and_violation_signals(failures, violations), n=5)
+
     for item in ranked:
         contract_id = str(item.get("contract_id", "unknown-system"))
+        contract_path = contract_yaml_path(contract_id)
         column = str(item.get("column_name", "unknown_field"))
         check_id = str(item.get("check_id", "unknown_check"))
+        expected = str(item.get("expected", "expected contract condition"))
+        actual = str(item.get("actual_value", "unknown actual value"))
+
         recommendations.append(
-            f"Update the producer for {contract_id} so field '{column}' satisfies check {check_id} before the next validation run."
+            f"Update {contract_path} and the upstream producer so {contract_clause_reference(check_id, column)} "
+            f"matches expected='{expected}' instead of actual='{actual}' for contract_id={contract_id}."
         )
         if len(recommendations) >= 3:
             break
 
     if len(recommendations) < 3 and schema_summary.get("compatibility_verdict") == "BREAKING":
-        recommendations.append(
-            "Coordinate a schema migration review with downstream consumers and execute the generated migration checklist before deployment."
-        )
+        checklist = schema_summary.get("migration_checklist", [])
+        if checklist:
+            recommendations.append(str(checklist[0]))
+        else:
+            recommendations.append(
+                "Review validation_reports/schema_evolution_*.json and execute the subscriber-specific migration checklist before deployment."
+            )
 
     if len(recommendations) < 3 and ai_summary.get("status") in {"WARN", "FAIL"}:
+        output_schema = ai_summary.get("output_schema_violation_rate") or {}
+        rate = output_schema.get("violation_rate", "unknown")
+        threshold = output_schema.get("warn_threshold", "unknown")
         recommendations.append(
-            "Investigate AI contract metrics for drift or output-schema degradation and rebaseline only after confirming the issue is understood."
+            f"Inspect violation_log/*_violations.jsonl and reduce output schema violation rate from {rate} to below {threshold} before rebaselining AI checks."
         )
 
     while len(recommendations) < 3:
         recommendations.append(
-            "Regenerate contracts and rerun validation after each upstream change so contract snapshots remain current and enforcement does not go stale."
+            "Regenerate generated_contracts/*.yaml and rerun validation_reports/*.json after each upstream schema change so contract clauses and enforcement outputs remain synchronized."
         )
 
     return recommendations[:3]
@@ -424,28 +514,29 @@ def build_report(
     violations: list[dict[str, Any]],
     schema_report: dict[str, Any] | None,
     ai_metrics: dict[str, Any] | None,
+    violation_log_path: Path,
 ) -> dict[str, Any]:
     failures = flatten_failures(reports)
     schema_summary = summarize_schema_changes(schema_report)
     ai_summary = summarize_ai_risk(ai_metrics)
     score = compute_health_score(reports, ai_summary, schema_summary, violations)
-    recommendations = derive_recommendations(failures, schema_summary, ai_summary)
+    recommendations = derive_recommendations(failures, violations, schema_summary, ai_summary)
 
     now = datetime.now(timezone.utc)
     period_start = (now - timedelta(days=7)).date().isoformat()
     period_end = now.date().isoformat()
 
-    top_failure_items = top_violations(failures, n=3)
+    merged_top_items = top_violations(merge_failure_and_violation_signals(failures, violations), n=3)
 
     return {
         "generated_at": iso_now(),
         "period": f"{period_start} to {period_end}",
         "data_health_score": score,
-        "health_narrative": health_narrative(score, failures, ai_summary),
+        "health_narrative": health_narrative(score, failures, violations, ai_summary, schema_summary),
         "validation_summary": status_counts(reports),
         "violations_this_week": {
-            "count_by_severity": severity_counts(failures),
-            "top_violations": [plain_language_violation(item) for item in top_failure_items],
+            "count_by_severity": severity_counts(merge_failure_and_violation_signals(failures, violations)),
+            "top_violations": [format_violation_description(item) for item in merged_top_items],
         },
         "schema_changes_detected": schema_summary,
         "ai_system_risk_assessment": ai_summary,
@@ -457,6 +548,7 @@ def build_report(
             "schema_evolution_included": schema_report is not None,
             "ai_metrics_included": ai_metrics is not None,
             "report_paths": [report.get("__path") for report in reports],
+            "violation_log_path": str(violation_log_path),
             "contract_ids": sorted({str(report.get("contract_id")) for report in reports}),
         },
     }
@@ -466,11 +558,12 @@ def main() -> None:
     args = parse_args()
 
     reports = choose_reports(args)
-    violations = load_jsonl(args.violations)
+    violation_log_path = resolve_violation_log_path(args, reports)
+    violations = load_jsonl(violation_log_path)
     schema_report = load_json(args.schema_evolution) if args.schema_evolution and Path(args.schema_evolution).exists() else None
     ai_metrics = load_json(args.ai_metrics) if args.ai_metrics and Path(args.ai_metrics).exists() else None
 
-    report = build_report(reports, violations, schema_report, ai_metrics)
+    report = build_report(reports, violations, schema_report, ai_metrics, violation_log_path)
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -479,6 +572,7 @@ def main() -> None:
 
     print(f"[OK] validation_reports={len(reports)}")
     print(f"[OK] attributed_violations={len(violations)}")
+    print(f"[OK] violation_log={violation_log_path}")
     print(f"[OK] output={output_path}")
     print(f"[OK] data_health_score={report['data_health_score']}")
 

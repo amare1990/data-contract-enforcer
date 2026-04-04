@@ -6,8 +6,16 @@ Implements three AI-specific contract checks:
 2. Prompt input schema validation
 3. Structured LLM output schema violation rate
 
-Supports both Week 3 extraction records and Week 5 event records by normalizing
-prompt inputs and text extraction across heterogeneous JSONL shapes.
+Supports:
+- Week 3 extraction records
+- Week 5 event records
+- LangSmith-like trace exports
+- Week 2 verdict records for structured output validation
+
+Enhancements:
+- writes WARN entries to violation_log/violations.jsonl when violation rates exceed thresholds
+- includes contract_id, metric values, and timestamp in violation log entries
+- makes LangSmith / trace-oriented inputs explicit in contract inference
 """
 
 from __future__ import annotations
@@ -16,6 +24,7 @@ import argparse
 import hashlib
 import json
 import os
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -88,7 +97,21 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional baseline violation rate for trend classification",
     )
+    parser.add_argument(
+        "--contract-id",
+        default=None,
+        help="Optional explicit contract identifier used in violation-log entries",
+    )
+    parser.add_argument(
+        "--violation-log",
+        default=None,
+        help="Optional override path. If not provided, uses violation_log/<contract_id>_violations.jsonl",
+    )
     return parser.parse_args()
+
+
+def iso_now() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -173,8 +196,22 @@ def extract_texts(records: list[dict[str, Any]]) -> list[str]:
                 "tool_output_summary",
                 "remediation_description",
                 "override_reason",
+                "input",
+                "output",
             ):
                 value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    texts.append(value.strip())
+
+        inputs = record.get("inputs")
+        if isinstance(inputs, dict):
+            for value in inputs.values():
+                if isinstance(value, str) and value.strip():
+                    texts.append(value.strip())
+
+        outputs = record.get("outputs")
+        if isinstance(outputs, dict):
+            for value in outputs.values():
                 if isinstance(value, str) and value.strip():
                     texts.append(value.strip())
 
@@ -240,6 +277,7 @@ def build_prompt_input_records(records: list[dict[str, Any]]) -> list[dict[str, 
             record.get("doc_id")
             or record.get("event_id")
             or record.get("id")
+            or record.get("run_id")
             or ""
         )
 
@@ -247,6 +285,7 @@ def build_prompt_input_records(records: list[dict[str, Any]]) -> list[dict[str, 
             record.get("source_path")
             or record.get("event_type")
             or record.get("record_type")
+            or record.get("name")
             or "unknown"
         )
 
@@ -273,8 +312,22 @@ def build_prompt_input_records(records: list[dict[str, Any]]) -> list[dict[str, 
                 "tool_output_summary",
                 "remediation_description",
                 "override_reason",
+                "input",
+                "output",
             ):
                 value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    preview_parts.append(value.strip())
+
+        inputs = record.get("inputs")
+        if isinstance(inputs, dict):
+            for value in inputs.values():
+                if isinstance(value, str) and value.strip():
+                    preview_parts.append(value.strip())
+
+        outputs = record.get("outputs")
+        if isinstance(outputs, dict):
+            for value in outputs.values():
                 if isinstance(value, str) and value.strip():
                     preview_parts.append(value.strip())
 
@@ -370,12 +423,7 @@ def check_output_schema_violation_rate(
     else:
         trend = "stable"
 
-    if violation_rate == 0:
-        status = "PASS"
-    elif violation_rate <= warn_threshold:
-        status = "WARN"
-    else:
-        status = "WARN"
+    status = "PASS" if violation_rate == 0 else "WARN"
 
     return {
         "status": status,
@@ -386,6 +434,64 @@ def check_output_schema_violation_rate(
         "baseline_violation_rate": baseline_rate,
         "warn_threshold": warn_threshold,
     }
+
+
+def infer_contract_id(extractions_path: str | None, verdicts_path: str | None, explicit: str | None) -> str:
+    if explicit:
+        return explicit
+
+    joined = " ".join([p for p in [extractions_path, verdicts_path] if p])
+    lowered = joined.lower()
+
+    if "week3" in lowered and "extractions" in lowered:
+        return "week3-document-refinery-extractions"
+    if "week5" in lowered and "events" in lowered:
+        return "week5-event-platform-events"
+    if "week2" in lowered and "verdict" in lowered:
+        return "week2-judicial-verdict-records"
+    if "langsmith" in lowered or "trace" in lowered or "runs" in lowered:
+        return "langsmith-trace-records"
+
+    return "unknown-ai-contract"
+
+
+def append_ai_warn_violation(
+    *,
+    contract_id: str,
+    output_schema_result: dict[str, Any],
+    violation_log_path: str | Path | None,
+) -> str:
+    if violation_log_path:
+        path = Path(violation_log_path)
+    else:
+        path = Path("violation_log") / f"{contract_id}_violations.jsonl"
+
+    entry = {
+        "violation_id": str(uuid.uuid4()),
+        "contract_id": contract_id,
+        "check_id": "llm_output_schema_violation_rate",
+        "detected_at": iso_now(),
+        "severity": "WARN",
+        "metric_name": "output_schema_violation_rate",
+        "metric_value": output_schema_result.get("violation_rate"),
+        "schema_violations": output_schema_result.get("schema_violations"),
+        "total_outputs": output_schema_result.get("total_outputs"),
+        "baseline_violation_rate": output_schema_result.get("baseline_violation_rate"),
+        "warn_threshold": output_schema_result.get("warn_threshold"),
+        "trend": output_schema_result.get("trend"),
+        "message": (
+            "Structured output schema violation rate exceeded the healthy threshold "
+            "and should be monitored as an AI contract warning."
+        ),
+        "source": "contracts/ai_extensions.py",
+    }
+
+    ensure_parent(path)
+
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    return str(path)
 
 
 def run_all(args: argparse.Namespace) -> dict[str, Any]:
@@ -421,6 +527,15 @@ def run_all(args: argparse.Namespace) -> dict[str, Any]:
             warn_threshold=args.warn_threshold,
         )
 
+        if output["output_schema"]["status"] == "WARN":
+            contract_id = infer_contract_id(args.extractions, args.verdicts, args.contract_id)
+            log_path = append_ai_warn_violation(
+                contract_id=contract_id,
+                output_schema_result=output["output_schema"],
+                violation_log_path=args.violation_log,
+            )
+            output["output_schema"]["violation_log_entry_written"] = log_path
+
     return output
 
 
@@ -441,6 +556,8 @@ def main() -> None:
         print(f"[OK] prompt_status={results['prompt_input_validation']['status']}")
     if "output_schema" in results:
         print(f"[OK] output_schema_status={results['output_schema']['status']}")
+        if results["output_schema"].get("violation_log_entry_written"):
+            print(f"[OK] output_schema_violation_log={results['output_schema']['violation_log_entry_written']}")
 
 
 if __name__ == "__main__":

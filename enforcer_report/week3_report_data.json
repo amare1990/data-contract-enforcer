@@ -1,40 +1,46 @@
 {
-  "generated_at": "2026-04-03T19:53:09Z",
-  "period": "2026-03-27 to 2026-04-03",
-  "data_health_score": 59,
-  "health_narrative": "Data health score is 59/100. There are 1 critical violations requiring immediate engineering action.",
+  "generated_at": "2026-04-04T10:08:03Z",
+  "period": "2026-03-28 to 2026-04-04",
+  "data_health_score": 47,
+  "health_narrative": "Data health score is 47/100. There are 1 critical validation failures and 2 logged contract violations requiring immediate engineering action.",
   "validation_summary": {
-    "passed": 38,
-    "failed": 2,
+    "passed": 39,
+    "failed": 3,
     "warned": 0,
     "errored": 0,
-    "total_checks": 40
+    "total_checks": 42
   },
   "violations_this_week": {
     "count_by_severity": {
       "CRITICAL": 1,
-      "HIGH": 1,
+      "HIGH": 2,
       "MEDIUM": 0,
       "LOW": 0,
       "WARNING": 0
     },
     "top_violations": [
-      "The system week3-document-refinery-extractions failed the range check on field 'confidence'. Expected min>=0.0, max<=1.0, but observed min=85.0000, max=90.0000, mean=85.1141. This issue impacts 8545 records and should be treated as a downstream reliability risk.",
-      "The system week3-document-refinery-extractions failed the statistical_drift check on field 'confidence'. Expected baseline_mean=0.8511, threshold<=2 WARN, <=3 FAIL, but observed current_mean=85.1141, z_score=11284.77. This issue impacts 0 records and should be treated as a downstream reliability risk."
+      "Contract week3-document-refinery-extractions violated check 'week3-document-refinery-extractions.confidence.range' on field 'confidence'. Expected 'min>=0.0, max<=1.0', observed 'min=85.0000, max=90.0000, mean=85.1141', affecting 8545 records/outputs. Review generated_contracts/week3_document_refinery_extractions.yaml before the next run.",
+      "Contract week3-document-refinery-extractions violated check 'week3-document-refinery-extractions.confidence.statistical_drift' on field 'confidence'. Expected 'baseline_mean=85.1141, threshold<=2 WARN, <=3 FAIL', observed 'current_mean=0.8511, z_score=112.85', affecting 0 records/outputs. Review generated_contracts/week3_document_refinery_extractions.yaml before the next run.",
+      "Contract week3-document-refinery-extractions violated check 'week3-document-refinery-extractions.confidence.statistical_drift' on field 'confidence'. Expected 'baseline_mean=0.8511, threshold<=2 WARN, <=3 FAIL', observed 'current_mean=85.1141, z_score=11284.77', affecting 0 records/outputs. Review generated_contracts/week3_document_refinery_extractions.yaml before the next run."
     ]
   },
   "schema_changes_detected": {
     "compatibility_verdict": "NO_CHANGE",
     "change_count": 0,
+    "critical_change_count": 0,
     "summary": [],
     "migration_checklist": [
-      "Review the latest and previous snapshots for contract week3-document-refinery-extractions and confirm each changed field.",
-      "Notify downstream consumers before applying the new schema in production.",
-      "Run ValidationRunner against a clean baseline after migration.",
-      "Regenerate contracts and schema snapshots after the migration is complete."
+      "Review the previous and latest snapshots for contract week3-document-refinery-extractions and confirm each changed field before rollout.",
+      "Notify subscriber week4-cartographer (week4-team@org.com) and confirm validation mode ENFORCE before deployment.",
+      "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20 before deployment.",
+      "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40 before deployment.",
+      "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69 before deployment.",
+      "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82 before deployment.",
+      "Run ValidationRunner on a clean baseline after migration.",
+      "Regenerate contracts and schema snapshots after migration completes."
     ],
     "rollback_plan": [
-      "Restore the previous snapshot-backed contract for week3-document-refinery-extractions using 20260403_190722.yaml as the rollback target.",
+      "Restore the previous snapshot-backed contract for week3-document-refinery-extractions using 20260404_100454.yaml as the rollback target.",
       "Revert the producer-side code change that introduced the incompatible schema diff.",
       "Re-run validation against the restored dataset and confirm critical failures clear."
     ]
@@ -69,9 +75,9 @@
     "narrative": "Embedding drift status is PASS with score 0.0. Structured output schema status is PASS with violation rate 0.0. Prompt input validation status is PASS with quarantined count 0."
   },
   "recommended_actions": [
-    "Update the producer for week3-document-refinery-extractions so field 'confidence' satisfies check week3-document-refinery-extractions.confidence.range before the next validation run.",
-    "Update the producer for week3-document-refinery-extractions so field 'confidence' satisfies check week3-document-refinery-extractions.confidence.statistical_drift before the next validation run.",
-    "Regenerate contracts and rerun validation after each upstream change so contract snapshots remain current and enforcement does not go stale."
+    "Update generated_contracts/week3_document_refinery_extractions.yaml and the upstream producer so check 'week3-document-refinery-extractions.confidence.range' on field 'confidence' matches expected='min>=0.0, max<=1.0' instead of actual='min=85.0000, max=90.0000, mean=85.1141' for contract_id=week3-document-refinery-extractions.",
+    "Update generated_contracts/week3_document_refinery_extractions.yaml and the upstream producer so check 'week3-document-refinery-extractions.confidence.statistical_drift' on field 'confidence' matches expected='baseline_mean=85.1141, threshold<=2 WARN, <=3 FAIL' instead of actual='current_mean=0.8511, z_score=112.85' for contract_id=week3-document-refinery-extractions.",
+    "Update generated_contracts/week3_document_refinery_extractions.yaml and the upstream producer so check 'week3-document-refinery-extractions.confidence.statistical_drift' on field 'confidence' matches expected='baseline_mean=0.8511, threshold<=2 WARN, <=3 FAIL' instead of actual='current_mean=85.1141, z_score=11284.77' for contract_id=week3-document-refinery-extractions."
   ],
   "attribution_summary": {
     "violation_count": 2,
@@ -83,7 +89,7 @@
           "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20",
           "commit_hash": "UNKNOWN",
           "author": "UNKNOWN",
-          "commit_timestamp": "2026-04-03T19:10:22Z",
+          "commit_timestamp": "2026-04-04T10:05:37Z",
           "commit_message": "No recent git history found for file.",
           "confidence_score": 0.4
         },
@@ -119,7 +125,7 @@
           "file_path": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20",
           "commit_hash": "UNKNOWN",
           "author": "UNKNOWN",
-          "commit_timestamp": "2026-04-03T19:10:22Z",
+          "commit_timestamp": "2026-04-04T10:05:37Z",
           "commit_message": "No recent git history found for file.",
           "confidence_score": 0.4
         },
@@ -159,6 +165,7 @@
       "validation_reports/week3_baseline.json",
       "validation_reports/week3_violated.json"
     ],
+    "violation_log_path": "violation_log/week3-document-refinery-extractions_violations.jsonl",
     "contract_ids": [
       "week3-document-refinery-extractions"
     ]

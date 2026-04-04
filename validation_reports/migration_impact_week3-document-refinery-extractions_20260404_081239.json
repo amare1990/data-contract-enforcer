@@ -1,9 +1,9 @@
 {
   "contract_id": "week3-document-refinery-extractions",
-  "generated_at": "2026-04-04T10:06:34Z",
+  "generated_at": "2026-04-04T08:12:50Z",
   "since": "7 days ago",
-  "snapshot_before": "schema_snapshots/week3-document-refinery-extractions/20260404_100454.yaml",
-  "snapshot_after": "schema_snapshots/week3-document-refinery-extractions/20260404_100631.yaml",
+  "snapshot_before": "schema_snapshots/week3-document-refinery-extractions/20260404_074807.yaml",
+  "snapshot_after": "schema_snapshots/week3-document-refinery-extractions/20260404_081239.yaml",
   "compatibility_verdict": "NO_CHANGE",
   "change_count": 0,
   "critical_change_count": 0,
@@ -141,7 +141,7 @@
     "Regenerate contracts and schema snapshots after migration completes."
   ],
   "rollback_plan": [
-    "Restore the previous snapshot-backed contract for week3-document-refinery-extractions using 20260404_100454.yaml as the rollback target.",
+    "Restore the previous snapshot-backed contract for week3-document-refinery-extractions using 20260404_074807.yaml as the rollback target.",
     "Revert the producer-side code change that introduced the incompatible schema diff.",
     "Re-run validation against the restored dataset and confirm critical failures clear."
   ],

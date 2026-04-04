@@ -190,7 +190,8 @@ schema:
     type: integer
     required: false
     minimum: 0
-    description: Observed list length during profiling.
+    description: 'Distribution note: upper-tail outlier concentration detected. Observed
+      list length during profiling.'
   payload.conditions[*]:
     type: string
     required: false
@@ -370,6 +371,7 @@ schema:
   payload.duration_ms:
     type: integer
     required: false
+    description: 'Distribution note: heavy-tailed numeric distribution detected.'
   payload.effective_date:
     type: string
     required: false
@@ -702,7 +704,8 @@ schema:
     type: integer
     required: false
     minimum: 0
-    description: Observed list length during profiling.
+    description: 'Distribution note: variance is disproportionately high relative
+      to mean. Observed list length during profiling.'
   payload.key_risks[*]:
     type: string
     required: false
@@ -898,6 +901,7 @@ schema:
   payload.requested_amount_usd:
     type: integer
     required: false
+    description: 'Distribution note: heavy-tailed numeric distribution detected.'
   payload.requested_at:
     type: string
     required: false
@@ -1106,37 +1110,200 @@ quality:
     - missing_count(metadata) = 0
     - missing_count(occurred_at) = 0
     - missing_count(payload) = 0
+    - distribution_baseline_exists(payload.adverse_action_codes.__len__) = true
+    - distribution_baseline_exists(payload.amount) = true
+    - distribution_baseline_exists(payload.analysis_duration_ms) = true
+    - distribution_baseline_exists(payload.anomalies.__len__) = true
+    - distribution_baseline_exists(payload.anomalies_found) = true
+    - distribution_baseline_exists(payload.anomaly_flags.__len__) = true
+    - distribution_baseline_exists(payload.approved_amount_usd) = true
+    - distribution_baseline_exists(payload.conditions.__len__) = true
     - min(payload.confidence) >= 0.0
     - max(payload.confidence) <= 1.0
+    - distribution_baseline_exists(payload.confidence) = true
     - min(payload.confidence_score) >= 0.0
     - max(payload.confidence_score) <= 1.0
+    - distribution_baseline_exists(payload.confidence_score) = true
+    - distribution_baseline_exists(payload.context_token_count) = true
+    - distribution_baseline_exists(payload.contributing_sessions.__len__) = true
+    - distribution_baseline_exists(payload.critical_missing_fields.__len__) = true
     - min(payload.decision.confidence) >= 0.0
     - max(payload.decision.confidence) <= 1.0
+    - distribution_baseline_exists(payload.decision.confidence) = true
+    - distribution_baseline_exists(payload.decision.data_quality_caveats.__len__)
+      = true
+    - distribution_baseline_exists(payload.decision.key_concerns.__len__) = true
+    - distribution_baseline_exists(payload.decision.policy_overrides_applied.__len__)
+      = true
+    - distribution_baseline_exists(payload.decision.recommended_limit_usd) = true
+    - distribution_baseline_exists(payload.decline_reasons.__len__) = true
+    - distribution_baseline_exists(payload.document_ids_consumed.__len__) = true
+    - distribution_baseline_exists(payload.documents_processed) = true
+    - distribution_baseline_exists(payload.duration_ms) = true
+    - distribution_baseline_exists(payload.event_replay_from_position) = true
+    - distribution_baseline_exists(payload.events_verified_count) = true
+    - distribution_baseline_exists(payload.events_written.__len__) = true
+    - distribution_baseline_exists(payload.events_written[*].stream_position) = true
+    - distribution_baseline_exists(payload.facts.accounts_receivable) = true
+    - distribution_baseline_exists(payload.facts.cash_and_equivalents) = true
+    - distribution_baseline_exists(payload.facts.current_assets) = true
+    - distribution_baseline_exists(payload.facts.current_liabilities) = true
+    - distribution_baseline_exists(payload.facts.current_ratio) = true
+    - distribution_baseline_exists(payload.facts.debt_to_ebitda) = true
+    - distribution_baseline_exists(payload.facts.debt_to_equity) = true
+    - distribution_baseline_exists(payload.facts.depreciation_amortization) = true
+    - distribution_baseline_exists(payload.facts.ebitda) = true
+    - distribution_baseline_exists(payload.facts.extraction_notes.__len__) = true
     - min(payload.facts.field_confidence) >= 0.0
     - max(payload.facts.field_confidence) <= 1.0
+    - distribution_baseline_exists(payload.facts.field_confidence.net_income) = true
+    - distribution_baseline_exists(payload.facts.field_confidence.total_assets) =
+      true
+    - distribution_baseline_exists(payload.facts.field_confidence.total_revenue) =
+      true
+    - distribution_baseline_exists(payload.facts.gross_margin) = true
+    - distribution_baseline_exists(payload.facts.gross_profit) = true
+    - distribution_baseline_exists(payload.facts.interest_coverage) = true
+    - distribution_baseline_exists(payload.facts.interest_expense) = true
+    - distribution_baseline_exists(payload.facts.inventory) = true
+    - distribution_baseline_exists(payload.facts.long_term_debt) = true
+    - distribution_baseline_exists(payload.facts.net_income) = true
+    - distribution_baseline_exists(payload.facts.net_margin) = true
+    - distribution_baseline_exists(payload.facts.operating_cash_flow) = true
+    - distribution_baseline_exists(payload.facts.operating_income) = true
+    - distribution_baseline_exists(payload.facts.total_assets) = true
+    - distribution_baseline_exists(payload.facts.total_equity) = true
+    - distribution_baseline_exists(payload.facts.total_liabilities) = true
+    - distribution_baseline_exists(payload.facts.total_revenue) = true
+    - distribution_baseline_exists(payload.file_size_bytes) = true
+    - distribution_baseline_exists(payload.fiscal_year) = true
+    - distribution_baseline_exists(payload.fiscal_years_loaded.__len__) = true
+    - distribution_baseline_exists(payload.fiscal_years_loaded[*]) = true
+    - distribution_baseline_exists(payload.fraud_score) = true
+    - distribution_baseline_exists(payload.input_keys.__len__) = true
+    - distribution_baseline_exists(payload.inputs_validated.__len__) = true
+    - distribution_baseline_exists(payload.interest_rate_pct) = true
+    - distribution_baseline_exists(payload.key_risks.__len__) = true
+    - distribution_baseline_exists(payload.llm_cost_usd) = true
+    - distribution_baseline_exists(payload.llm_tokens_input) = true
+    - distribution_baseline_exists(payload.llm_tokens_output) = true
+    - distribution_baseline_exists(payload.loan_term_months) = true
+    - distribution_baseline_exists(payload.matched_rules.__len__) = true
+    - distribution_baseline_exists(payload.node_sequence) = true
+    - distribution_baseline_exists(payload.output_keys.__len__) = true
     - min(payload.overall_confidence) >= 0.0
     - max(payload.overall_confidence) <= 1.0
+    - distribution_baseline_exists(payload.overall_confidence) = true
+    - distribution_baseline_exists(payload.page_count) = true
+    - distribution_baseline_exists(payload.previous_hash) = true
+    - distribution_baseline_exists(payload.processing_ms) = true
+    - distribution_baseline_exists(payload.quality_flag_count) = true
+    - distribution_baseline_exists(payload.raw_text_length) = true
+    - distribution_baseline_exists(payload.recommended_limit_usd) = true
+    - distribution_baseline_exists(payload.regulatory_basis.__len__) = true
+    - distribution_baseline_exists(payload.requested_amount_usd) = true
+    - distribution_baseline_exists(payload.required_document_types.__len__) = true
+    - distribution_baseline_exists(payload.required_documents.__len__) = true
+    - distribution_baseline_exists(payload.rules_evaluated) = true
+    - distribution_baseline_exists(payload.rules_failed) = true
+    - distribution_baseline_exists(payload.rules_noted) = true
+    - distribution_baseline_exists(payload.rules_passed) = true
+    - distribution_baseline_exists(payload.rules_to_evaluate.__len__) = true
+    - distribution_baseline_exists(payload.screening_duration_ms) = true
+    - distribution_baseline_exists(payload.tables_extracted) = true
+    - distribution_baseline_exists(payload.term) = true
+    - distribution_baseline_exists(payload.term_months) = true
+    - distribution_baseline_exists(payload.tool_duration_ms) = true
+    - distribution_baseline_exists(payload.total_cost_usd) = true
+    - distribution_baseline_exists(payload.total_duration_ms) = true
+    - distribution_baseline_exists(payload.total_llm_calls) = true
+    - distribution_baseline_exists(payload.total_nodes_executed) = true
+    - distribution_baseline_exists(payload.total_tokens_used) = true
+    - distribution_baseline_exists(payload.validation_duration_ms) = true
     - missing_count(recorded_at) = 0
     - missing_count(schema_version) = 0
+    - distribution_baseline_exists(schema_version) = true
     - missing_count(sequence_number) = 0
+    - distribution_baseline_exists(sequence_number) = true
     - row_count >= 1
     - recorded_at >= occurred_at
     - sequence_number is_monotonic_per aggregate_id
 llm_annotations:
-- status: pending
-  fields:
-  - payload
-  - payload.decision
-  - payload.decision.key_concerns
-  - payload.document_ids_consumed
-  - payload.events_written
-  - payload.events_written[*]
-  - payload.facts
-  - payload.facts.field_confidence
-  - payload.input_keys
-  - payload.output_keys
-  note: Business-meaning enrichment can be added for ambiguous columns using a model-assisted
-    pass. This generator keeps baseline contracts deterministic and offline-safe.
+- field: occurred_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload
+  status: heuristic_review_required
+  suggested_semantic_type: complex_semantic_structure
+  reason: Nested/high-cardinality structure should be reviewed for business meaning
+    and decomposition.
+- field: payload.added_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload.approved_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload.assessed_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload.called_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload.completed_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload.confidence
+  status: heuristic_review_required
+  suggested_semantic_type: model_confidence_score
+  reason: Confidence-like field should preserve 0.0-1.0 semantics across producers
+    and consumers.
+- field: payload.confidence_score
+  status: heuristic_review_required
+  suggested_semantic_type: model_confidence_score
+  reason: Confidence-like field should preserve 0.0-1.0 semantics across producers
+    and consumers.
+- field: payload.consumed_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload.created_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
+- field: payload.decision
+  status: heuristic_review_required
+  suggested_semantic_type: complex_semantic_structure
+  reason: Nested/high-cardinality structure should be reviewed for business meaning
+    and decomposition.
+- field: payload.decision.confidence
+  status: heuristic_review_required
+  suggested_semantic_type: model_confidence_score
+  reason: Confidence-like field should preserve 0.0-1.0 semantics across producers
+    and consumers.
+- field: payload.decision.key_concerns
+  status: heuristic_review_required
+  suggested_semantic_type: complex_semantic_structure
+  reason: Nested/high-cardinality structure should be reviewed for business meaning
+    and decomposition.
+- field: payload.declined_at
+  status: heuristic_review_required
+  suggested_semantic_type: event_or_processing_timestamp
+  reason: Timestamp-like field should be reviewed for producer clock semantics and
+    timezone expectations.
 lineage:
   upstream: []
   downstream:

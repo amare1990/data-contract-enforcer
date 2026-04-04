@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-04-03T19:54:30Z",
-  "period": "2026-03-27 to 2026-04-03",
+  "generated_at": "2026-04-04T10:04:07Z",
+  "period": "2026-03-28 to 2026-04-04",
   "data_health_score": 0,
-  "health_narrative": "Data health score is 0/100. Core validation may be functioning, but AI-specific risk controls are failing and require immediate remediation.",
+  "health_narrative": "Data health score is 0/100. AI-specific risk controls are failing, and the violation log indicates 4 contract issues requiring immediate remediation before deployment.",
   "validation_summary": {
-    "passed": 783,
+    "passed": 881,
     "failed": 3,
     "warned": 21,
     "errored": 3,
-    "total_checks": 810
+    "total_checks": 908
   },
   "violations_this_week": {
     "count_by_severity": {
@@ -19,23 +19,71 @@
       "WARNING": 0
     },
     "top_violations": [
-      "The system week5-event-platform-events failed the type check on field 'sequence_number'. Expected type=integer, but observed invalid_type_count=1. This issue impacts 1 records and should be treated as a downstream reliability risk.",
-      "The system week5-event-platform-events failed the quality_rule check on field 'recorded_at,occurred_at'. Expected recorded_at >= occurred_at, but observed violations=1. This issue impacts 1 records and should be treated as a downstream reliability risk.",
-      "The system week5-event-platform-events failed the quality_rule check on field 'aggregate_id,sequence_number'. Expected sequence_number is_monotonic_per aggregate_id, but observed violations=1. This issue impacts 1 records and should be treated as a downstream reliability risk."
+      "Contract week5-event-platform-events violated check 'week5-event-platform-events.sequence_number.type' on field 'sequence_number'. Expected 'type=integer', observed 'invalid_type_count=1', affecting 1 records/outputs. Review generated_contracts/week5_event_platform_events.yaml before the next run.",
+      "Contract week5-event-platform-events violated check 'week5-event-platform-events.quality.recorded_at_gte_occurred_at' on field 'recorded_at,occurred_at'. Expected 'recorded_at >= occurred_at', observed 'violations=1', affecting 1 records/outputs. Review generated_contracts/week5_event_platform_events.yaml before the next run.",
+      "Contract week5-event-platform-events violated check 'week5-event-platform-events.quality.sequence_monotonic_per_aggregate' on field 'aggregate_id,sequence_number'. Expected 'sequence_number is_monotonic_per aggregate_id', observed 'violations=1', affecting 1 records/outputs. Review generated_contracts/week5_event_platform_events.yaml before the next run."
     ]
   },
   "schema_changes_detected": {
     "compatibility_verdict": "NO_CHANGE",
     "change_count": 0,
+    "critical_change_count": 0,
     "summary": [],
     "migration_checklist": [
-      "Review the latest and previous snapshots for contract week5-event-platform-events and confirm each changed field.",
-      "Notify downstream consumers before applying the new schema in production.",
-      "Run ValidationRunner against a clean baseline after migration.",
-      "Regenerate contracts and schema snapshots after the migration is complete."
+      "Review the previous and latest snapshots for contract week5-event-platform-events and confirm each changed field before rollout.",
+      "Notify subscriber week7-enforcer (week7-team@org.com) and confirm validation mode ENFORCE before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::19 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::33 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::22 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/conftest.py::call::27 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::85 before deployment.",
+      "Notify subscriber sql::../../Week 5/ledger-event-store/src/schema.sql before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/scripts/seal_ledger.py::call::23 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/demos/demo_recovery.py::call::20 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::23 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/test_concurrency.py::call::86 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::28 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::21 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/event_store.py::call::305 before deployment.",
+      "Notify subscriber event_streams (stream_id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, current_version BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, archived_at TIMESTAMPTZ, metadata JSONB NOT NULL DEFAULT CAST('{}' AS JSONB)) before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::146 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::157 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::180 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::189 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::193 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/datagen/generate_all.py::call::201 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/demos/demo_upcasting.py::call::24 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/test_gas_town.py::call::35 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/test_projections.py::call::44 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/tests/test_upcasting.py::call::27 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/event_store.py::call::75 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/event_store.py::call::156 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/event_store.py::call::167 before deployment.",
+      "Notify subscriber sql::../../Week 5/ledger-event-store/scripts/reset_projections.sql before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/snapshots/store.py::call::14 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::27 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::57 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/agent_performance.py::call::89 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::34 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::50 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/compliance_audit.py::call::88 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::31 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::51 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::67 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::91 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::109 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::119 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::132 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::149 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::170 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::189 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/application_summary.py::call::212 before deployment.",
+      "Notify subscriber py::../../Week 5/ledger-event-store/src/projections/daemon.py::call::84 before deployment.",
+      "Run ValidationRunner on a clean baseline after migration.",
+      "Regenerate contracts and schema snapshots after migration completes."
     ],
     "rollback_plan": [
-      "Restore the previous snapshot-backed contract for week5-event-platform-events using 20260403_194046.yaml as the rollback target.",
+      "Restore the previous snapshot-backed contract for week5-event-platform-events using 20260404_100032.yaml as the rollback target.",
       "Revert the producer-side code change that introduced the incompatible schema diff.",
       "Re-run validation against the restored dataset and confirm critical failures clear."
     ]
@@ -43,21 +91,22 @@
   "ai_system_risk_assessment": {
     "status": "FAIL",
     "embedding_drift": {
-      "status": "PASS",
+      "status": "BASELINE_SET",
       "drift_score": 0.0,
       "threshold": 0.15,
       "sample_size": 200,
-      "interpretation": "stable",
+      "interpretation": "Baseline created from current embedding centroid.",
       "backend": "local-hash"
     },
     "output_schema_violation_rate": {
-      "status": "PASS",
+      "status": "WARN",
       "total_outputs": 41,
-      "schema_violations": 0,
-      "violation_rate": 0.0,
+      "schema_violations": 1,
+      "violation_rate": 0.0244,
       "trend": "unknown",
       "baseline_violation_rate": null,
-      "warn_threshold": 0.02
+      "warn_threshold": 0.02,
+      "violation_log_entry_written": "violation_log/week5-event-platform-events_violations.jsonl"
     },
     "prompt_input_validation": {
       "status": "FAIL",
@@ -67,15 +116,15 @@
       "quarantine_path": "outputs/quarantine/quarantine.jsonl",
       "schema": "draft-07"
     },
-    "narrative": "Embedding drift status is PASS with score 0.0. Structured output schema status is PASS with violation rate 0.0. Prompt input validation status is FAIL with quarantined count 2781."
+    "narrative": "Embedding drift status is BASELINE_SET with score 0.0. Structured output schema status is WARN with violation rate 0.0244. Prompt input validation status is FAIL with quarantined count 2781."
   },
   "recommended_actions": [
-    "Update the producer for week5-event-platform-events so field 'sequence_number' satisfies check week5-event-platform-events.sequence_number.type before the next validation run.",
-    "Update the producer for week5-event-platform-events so field 'recorded_at,occurred_at' satisfies check week5-event-platform-events.quality.recorded_at_gte_occurred_at before the next validation run.",
-    "Update the producer for week5-event-platform-events so field 'aggregate_id,sequence_number' satisfies check week5-event-platform-events.quality.sequence_monotonic_per_aggregate before the next validation run."
+    "Update generated_contracts/week5_event_platform_events.yaml and the upstream producer so check 'week5-event-platform-events.sequence_number.type' on field 'sequence_number' matches expected='type=integer' instead of actual='invalid_type_count=1' for contract_id=week5-event-platform-events.",
+    "Update generated_contracts/week5_event_platform_events.yaml and the upstream producer so check 'week5-event-platform-events.quality.recorded_at_gte_occurred_at' on field 'recorded_at,occurred_at' matches expected='recorded_at >= occurred_at' instead of actual='violations=1' for contract_id=week5-event-platform-events.",
+    "Update generated_contracts/week5_event_platform_events.yaml and the upstream producer so check 'week5-event-platform-events.quality.sequence_monotonic_per_aggregate' on field 'aggregate_id,sequence_number' matches expected='sequence_number is_monotonic_per aggregate_id' instead of actual='violations=1' for contract_id=week5-event-platform-events."
   ],
   "attribution_summary": {
-    "violation_count": 3,
+    "violation_count": 4,
     "top_blame_candidates": [
       {
         "check_id": "week5-event-platform-events.sequence_number.type",
@@ -84,7 +133,7 @@
           "file_path": "UNKNOWN",
           "commit_hash": "UNKNOWN",
           "author": "UNKNOWN",
-          "commit_timestamp": "2026-04-03T19:43:08Z",
+          "commit_timestamp": "2026-04-04T10:02:55Z",
           "commit_message": "No lineage or git candidate available.",
           "confidence_score": 0.0
         },
@@ -831,7 +880,7 @@
           "file_path": "UNKNOWN",
           "commit_hash": "UNKNOWN",
           "author": "UNKNOWN",
-          "commit_timestamp": "2026-04-03T19:43:08Z",
+          "commit_timestamp": "2026-04-04T10:02:55Z",
           "commit_message": "No lineage or git candidate available.",
           "confidence_score": 0.0
         },
@@ -1578,7 +1627,7 @@
           "file_path": "UNKNOWN",
           "commit_hash": "UNKNOWN",
           "author": "UNKNOWN",
-          "commit_timestamp": "2026-04-03T19:43:08Z",
+          "commit_timestamp": "2026-04-04T10:02:55Z",
           "commit_message": "No lineage or git candidate available.",
           "confidence_score": 0.0
         },
@@ -2322,13 +2371,14 @@
   },
   "source_artifacts": {
     "validation_report_count": 2,
-    "attributed_violation_count": 3,
+    "attributed_violation_count": 4,
     "schema_evolution_included": true,
     "ai_metrics_included": true,
     "report_paths": [
       "validation_reports/week5_baseline.json",
       "validation_reports/week5_violated.json"
     ],
+    "violation_log_path": "violation_log/week5-event-platform-events_violations.jsonl",
     "contract_ids": [
       "week5-event-platform-events"
     ]

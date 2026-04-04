@@ -791,7 +791,7 @@ def validate_contract(records: list[dict[str, Any]], contract: dict[str, Any], d
     contract_schema = contract.get("schema", {})
     results: list[dict[str, Any]] = []
 
-    baselines_path = Path("schema_snapshots") / "baselines.json"
+    baselines_path = Path("schema_snapshots") / f"{contract_id}_baselines.json"
     baselines = load_baselines(baselines_path)
 
     for column, clause in contract_schema.items():

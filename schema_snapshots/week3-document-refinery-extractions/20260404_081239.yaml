@@ -58,14 +58,22 @@ quality:
     - missing_count(confidence) = 0
     - min(confidence) >= 0.0
     - max(confidence) <= 1.0
+    - distribution_baseline_exists(confidence) = true
     - missing_count(content_hash) = 0
     - missing_count(doc_id) = 0
     - duplicate_count(doc_id) = 0
     - missing_count(ldu_id) = 0
     - missing_count(page_number) = 0
+    - distribution_baseline_exists(page_number) = true
     - missing_count(source_path) = 0
     - missing_count(text) = 0
     - row_count >= 1
+llm_annotations:
+- field: confidence
+  status: heuristic_review_required
+  suggested_semantic_type: model_confidence_score
+  reason: Confidence-like field should preserve 0.0-1.0 semantics across producers
+    and consumers.
 lineage:
   upstream: []
   downstream:

@@ -1,14 +1,14 @@
 {
-  "report_id": "b259f345-b91e-4b11-b802-68d17bfce730",
+  "report_id": "928d1c2b-d1b8-4e71-8d8c-82d020b5e7c9",
   "contract_id": "week3-document-refinery-extractions",
   "snapshot_id": "2898f9fd1f3e37b983657374d3312f1a66d211eb636db5f1e8249fe79d782188",
-  "run_timestamp": "2026-04-03T19:09:27Z",
+  "run_timestamp": "2026-04-04T10:05:14Z",
   "enforcement_mode": "AUDIT",
   "blocking_violation_count": 0,
   "would_block_pipeline": false,
-  "total_checks": 19,
-  "passed": 19,
-  "failed": 0,
+  "total_checks": 21,
+  "passed": 20,
+  "failed": 1,
   "warned": 0,
   "errored": 0,
   "results": [
@@ -47,6 +47,18 @@
       "records_failing": 0,
       "sample_failing": [],
       "message": "Numeric values are within the allowed range."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.confidence.statistical_drift",
+      "column_name": "confidence",
+      "check_type": "statistical_drift",
+      "status": "FAIL",
+      "actual_value": "current_mean=0.8511, z_score=112.85",
+      "expected": "baseline_mean=85.1141, threshold<=2 WARN, <=3 FAIL",
+      "severity": "HIGH",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "confidence mean drifted 112.8 stddev from baseline."
     },
     {
       "check_id": "week3-document-refinery-extractions.content_hash.required",
@@ -167,6 +179,18 @@
       "records_failing": 0,
       "sample_failing": [],
       "message": "All non-null observed values conform to expected type integer."
+    },
+    {
+      "check_id": "week3-document-refinery-extractions.page_number.statistical_drift",
+      "column_name": "page_number",
+      "check_type": "statistical_drift",
+      "status": "PASS",
+      "actual_value": "current_mean=86.3904, z_score=0.00",
+      "expected": "baseline_mean=86.3904, threshold<=2 WARN, <=3 FAIL",
+      "severity": "LOW",
+      "records_failing": 0,
+      "sample_failing": [],
+      "message": "page_number mean within baseline tolerance (0.0 stddev)."
     },
     {
       "check_id": "week3-document-refinery-extractions.source_path.required",

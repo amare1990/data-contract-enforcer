@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """ContractGenerator for TRP1 Week 8: Data Contract Enforcer.
 
-Generates Bitol-compatible YAML contracts, dbt schema YAML, and timestamped
-schema snapshots from JSONL outputs.
+Generates Bitol-compatible YAML contracts, dbt schema YAML, timestamped
+schema snapshots, and persistent statistical baseline artifacts from JSONL outputs.
 
-Rewritten goals:
+Goals:
 - general nested JSONL profiling for any week
 - path-based schema inference using dotted paths and [*] array selectors
 - coverage-based required inference to avoid sparse-field false positives
 - deterministic and evaluator-friendly CLI
+- explicit baseline artifact persistence for drift-aware validation
 """
 
 from __future__ import annotations
@@ -68,7 +69,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True, help="Path to JSONL source file")
     parser.add_argument("--contract-id", required=True, help="Stable contract identifier")
     parser.add_argument("--lineage", required=False, help="Path to lineage snapshot JSONL")
-    parser.add_argument("--registry", required=False, default="contract_registry/subscriptions.yaml", help="Optional contract registry YAML used to inject downstream subscribers")
+    parser.add_argument(
+        "--registry",
+        required=False,
+        default="contract_registry/subscriptions.yaml",
+        help="Optional contract registry YAML used to inject downstream subscribers",
+    )
     parser.add_argument("--output", required=True, help="Directory for generated contracts")
     parser.add_argument(
         "--owner",
@@ -76,6 +82,10 @@ def parse_args() -> argparse.Namespace:
         help="Contract owner label written into YAML",
     )
     return parser.parse_args()
+
+
+def iso_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -109,8 +119,6 @@ def load_latest_lineage_snapshot(lineage_path: str | Path | None) -> dict[str, A
     return records[-1] if records else None
 
 
-
-
 def load_registry(path: str | Path | None) -> dict[str, Any] | None:
     if not path:
         return None
@@ -128,6 +136,16 @@ def normalize_field_path(value: str) -> str:
     value = value.replace(".__len__", "")
     value = re.sub(r"\.+", ".", value)
     return value.strip(".")
+
+
+def dedupe_preserve_order(items: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
 
 
 def infer_breaking_fields(context: ContractContext, profiles: dict[str, ColumnProfile]) -> list[str]:
@@ -220,6 +238,7 @@ def singularize(name: str) -> str:
     if name.endswith("s") and len(name) > 1:
         return name[:-1]
     return name
+
 
 def base_array_path(name: str) -> str | None:
     if name.endswith("[*]"):
@@ -512,6 +531,30 @@ def infer_type(profile: ColumnProfile) -> str:
     return "string"
 
 
+def suspicious_distribution_reason(profile: ColumnProfile) -> str | None:
+    stats = profile.stats
+    if not stats:
+        return None
+
+    min_v = float(stats.get("min", 0.0))
+    max_v = float(stats.get("max", 0.0))
+    mean_v = float(stats.get("mean", 0.0))
+    stddev_v = float(stats.get("stddev", 0.0))
+    p50_v = float(stats.get("p50", 0.0))
+    p95_v = float(stats.get("p95", 0.0))
+    p99_v = float(stats.get("p99", 0.0))
+
+    if is_confidence_field(profile.name) and (min_v < 0.0 or max_v > 1.0):
+        return "confidence field observed outside 0.0-1.0 range"
+    if p50_v != 0 and abs(p99_v / p50_v) > 25:
+        return "heavy-tailed numeric distribution detected"
+    if mean_v != 0 and stddev_v > abs(mean_v) * 3:
+        return "variance is disproportionately high relative to mean"
+    if p95_v == p99_v == max_v and max_v > mean_v * 5:
+        return "upper-tail outlier concentration detected"
+    return None
+
+
 def apply_domain_specific_overrides(profile: ColumnProfile, clause: dict[str, Any], desc_parts: list[str]) -> None:
     name = profile.name
 
@@ -551,6 +594,7 @@ def apply_domain_specific_overrides(profile: ColumnProfile, clause: dict[str, An
         clause["type"] = "integer"
         clause["minimum"] = 0
         desc_parts.append("Observed list length during profiling.")
+
 
 def infer_clause(profile: ColumnProfile) -> dict[str, Any]:
     clause: dict[str, Any] = {
@@ -620,12 +664,17 @@ def infer_clause(profile: ColumnProfile) -> dict[str, Any]:
             clause["enum"] = enum_values
             desc_parts.append("Low-cardinality categorical field inferred from observed data.")
 
+    suspicious = suspicious_distribution_reason(profile)
+    if suspicious:
+        desc_parts.append(f"Distribution note: {suspicious}.")
+
     apply_domain_specific_overrides(profile, clause, desc_parts)
 
     if desc_parts:
         clause["description"] = " ".join(desc_parts)
 
     return clause
+
 
 def build_schema_section(profiles: dict[str, ColumnProfile]) -> dict[str, Any]:
     schema = {name: infer_clause(profile) for name, profile in sorted(profiles.items())}
@@ -645,6 +694,7 @@ def build_schema_section(profiles: dict[str, ColumnProfile]) -> dict[str, Any]:
                         parent_clause["items"]["enum"] = item_clause["enum"]
 
     return schema
+
 
 def build_quality_checks(context: ContractContext, profiles: dict[str, ColumnProfile]) -> list[str]:
     checks: list[str] = []
@@ -673,6 +723,9 @@ def build_quality_checks(context: ContractContext, profiles: dict[str, ColumnPro
         if profile.name == "total_tokens":
             checks.append("min(total_tokens) >= 0")
 
+        if profile.stats is not None:
+            checks.append(f"distribution_baseline_exists({profile.name}) = true")
+
     checks.append("row_count >= 1")
 
     if context.logical_name == "traces":
@@ -684,16 +737,6 @@ def build_quality_checks(context: ContractContext, profiles: dict[str, ColumnPro
         checks.append("sequence_number is_monotonic_per aggregate_id")
 
     return dedupe_preserve_order(checks)
-
-
-def dedupe_preserve_order(items: Iterable[str]) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for item in items:
-        if item not in seen:
-            seen.add(item)
-            out.append(item)
-    return out
 
 
 def source_hints_for_context(context: ContractContext) -> list[str]:
@@ -804,22 +847,80 @@ def add_llm_annotation_placeholder(
     context: ContractContext,
     profiles: dict[str, ColumnProfile],
 ) -> None:
-    ambiguous = [
-        p.name
-        for p in profiles.values()
-        if p.dtype in {"object", "array"} and p.cardinality_estimate > 10 and not p.name.endswith("_id")
-    ]
-    if ambiguous:
-        contract["llm_annotations"] = [
-            {
-                "status": "pending",
-                "fields": ambiguous[:10],
-                "note": (
-                    "Business-meaning enrichment can be added for ambiguous columns using a model-assisted pass. "
-                    "This generator keeps baseline contracts deterministic and offline-safe."
-                ),
-            }
-        ]
+    annotations: list[dict[str, Any]] = []
+
+    for profile in sorted(profiles.values(), key=lambda p: p.name):
+        if profile.name.endswith("_id") or profile.name.endswith(".id"):
+            continue
+
+        suggestion: str | None = None
+        reason: str | None = None
+
+        if profile.dtype in {"object", "array"} and profile.cardinality_estimate > 10:
+            suggestion = "complex_semantic_structure"
+            reason = "Nested/high-cardinality structure should be reviewed for business meaning and decomposition."
+        elif "confidence" in profile.name.lower():
+            suggestion = "model_confidence_score"
+            reason = "Confidence-like field should preserve 0.0-1.0 semantics across producers and consumers."
+        elif profile.name.endswith("_at") or profile.name.endswith("_time"):
+            suggestion = "event_or_processing_timestamp"
+            reason = "Timestamp-like field should be reviewed for producer clock semantics and timezone expectations."
+        elif profile.name.endswith("payload") or ".payload" in profile.name:
+            suggestion = "event_payload"
+            reason = "Payload-like field likely carries business-domain structure requiring semantic review."
+
+        if suggestion:
+            annotations.append(
+                {
+                    "field": profile.name,
+                    "status": "heuristic_review_required",
+                    "suggested_semantic_type": suggestion,
+                    "reason": reason,
+                }
+            )
+
+    if annotations:
+        contract["llm_annotations"] = annotations[:15]
+
+
+def build_baseline_artifact(
+    contract_id: str,
+    source_path: str,
+    profiles: dict[str, ColumnProfile],
+) -> dict[str, Any]:
+    numeric_columns: dict[str, Any] = {}
+    confidence_fields: dict[str, Any] = {}
+
+    for profile in sorted(profiles.values(), key=lambda p: p.name):
+        if not profile.stats:
+            continue
+
+        entry = {
+            "mean": round(float(profile.stats["mean"]), 6),
+            "stddev": round(float(profile.stats["stddev"]), 6),
+            "min": round(float(profile.stats["min"]), 6),
+            "max": round(float(profile.stats["max"]), 6),
+            "p25": round(float(profile.stats["p25"]), 6),
+            "p50": round(float(profile.stats["p50"]), 6),
+            "p75": round(float(profile.stats["p75"]), 6),
+            "p95": round(float(profile.stats["p95"]), 6),
+            "p99": round(float(profile.stats["p99"]), 6),
+            "suspicious_distribution": suspicious_distribution_reason(profile),
+            "observed_count": profile.observed_count,
+            "record_count": profile.record_count,
+            "null_fraction": round(profile.null_fraction, 6),
+        }
+        numeric_columns[profile.name] = entry
+        if is_confidence_field(profile.name):
+            confidence_fields[profile.name] = entry
+
+    return {
+        "contract_id": contract_id,
+        "source_path": source_path,
+        "generated_at": iso_now(),
+        "numeric_columns": numeric_columns,
+        "confidence_fields": confidence_fields,
+    }
 
 
 def build_contract(
@@ -966,6 +1067,7 @@ def sanitize_contract_basename(contract_id: str) -> str:
     replacements = {
         "week3-document-refinery-extractions": "week3_extractions",
         "week5-event-records": "week5_events",
+        "week5-event-platform-events": "week5_event_platform_events",
         "week4-lineage-snapshots": "week4_lineage",
         "langsmith-trace-records": "langsmith_traces",
     }
@@ -984,6 +1086,21 @@ def write_yaml(path: Path, payload: dict[str, Any]) -> None:
         yaml.safe_dump(payload, f, sort_keys=False, allow_unicode=True)
 
 
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+
+def update_baselines_file(path: Path, baseline_payload: dict[str, Any]) -> None:
+    existing: dict[str, Any] = {}
+    if path.exists():
+        with path.open("r", encoding="utf-8") as f:
+            existing = json.load(f)
+    existing[baseline_payload["contract_id"]] = baseline_payload
+    write_json(path, existing)
+
+
 def write_schema_snapshot(contract_path: Path, contract_id: str) -> Path:
     snapshot_dir = Path("schema_snapshots") / contract_id
     snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -998,12 +1115,14 @@ def print_summary(
     contract_path: Path,
     dbt_path: Path,
     snapshot_path: Path,
+    baseline_path: Path,
     profiles: dict[str, ColumnProfile],
 ) -> None:
     print(f"[OK] source={source_path}")
     print(f"[OK] columns_profiled={len(profiles)}")
     print(f"[OK] contract={contract_path}")
     print(f"[OK] dbt_schema={dbt_path}")
+    print(f"[OK] baselines={baseline_path}")
     print(f"[OK] snapshot={snapshot_path}")
 
 
@@ -1021,9 +1140,14 @@ def main() -> None:
     contract_path, dbt_path = output_paths(args.output, args.contract_id)
     write_yaml(contract_path, contract)
     write_yaml(dbt_path, dbt_schema)
+
+    baseline_payload = build_baseline_artifact(args.contract_id, args.source, profiles)
+    baseline_path = Path("schema_snapshots") / f"{args.contract_id}_baselines.json"
+    update_baselines_file(baseline_path, baseline_payload)
+
     snapshot_path = write_schema_snapshot(contract_path, args.contract_id)
 
-    print_summary(args.source, contract_path, dbt_path, snapshot_path, profiles)
+    print_summary(args.source, contract_path, dbt_path, snapshot_path, baseline_path, profiles)
 
 
 if __name__ == "__main__":
