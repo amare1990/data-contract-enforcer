@@ -1142,7 +1142,7 @@ def main() -> None:
     write_yaml(dbt_path, dbt_schema)
 
     baseline_payload = build_baseline_artifact(args.contract_id, args.source, profiles)
-    baseline_path = Path("schema_snapshots") / "baselines.json"
+    baseline_path = Path("schema_snapshots") / f"{args.contract_id}_baselines.json"
     update_baselines_file(baseline_path, baseline_payload)
 
     snapshot_path = write_schema_snapshot(contract_path, args.contract_id)
