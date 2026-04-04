@@ -2,7 +2,7 @@
   "week3-document-refinery-extractions": {
     "contract_id": "week3-document-refinery-extractions",
     "source_path": "outputs/week3/extractions.jsonl",
-    "generated_at": "2026-04-04T07:48:07Z",
+    "generated_at": "2026-04-04T08:12:39Z",
     "numeric_columns": {
       "confidence": {
         "mean": 0.851141,

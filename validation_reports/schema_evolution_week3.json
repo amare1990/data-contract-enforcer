@@ -1,0 +1,149 @@
+{
+  "contract_id": "week3-document-refinery-extractions",
+  "generated_at": "2026-04-04T08:12:50Z",
+  "since": "7 days ago",
+  "snapshot_before": "schema_snapshots/week3-document-refinery-extractions/20260404_074807.yaml",
+  "snapshot_after": "schema_snapshots/week3-document-refinery-extractions/20260404_081239.yaml",
+  "compatibility_verdict": "NO_CHANGE",
+  "change_count": 0,
+  "critical_change_count": 0,
+  "changes": [],
+  "full_blast_radius": {
+    "affected_nodes": [
+      "week4-cartographer",
+      "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20",
+      "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40",
+      "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69",
+      "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82"
+    ],
+    "affected_pipelines": [],
+    "affected_subscribers": [
+      {
+        "id": "week4-cartographer",
+        "subscriber_team": "week4",
+        "fields_consumed": [
+          "doc_id",
+          "extracted_facts",
+          "extraction_model"
+        ],
+        "breaking_fields": [
+          {
+            "field": "extracted_facts.confidence",
+            "reason": "used for node ranking; scale change breaks ranking logic"
+          },
+          {
+            "field": "doc_id",
+            "reason": "primary key for node identity in lineage graph"
+          }
+        ],
+        "validation_mode": "ENFORCE",
+        "contact": "week4-team@org.com",
+        "source": "registry"
+      },
+      {
+        "id": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20",
+        "subscriber_team": null,
+        "fields_consumed": [
+          "doc_id",
+          "extracted_facts",
+          "entities",
+          "extraction_model"
+        ],
+        "breaking_fields": [
+          "confidence",
+          "content_hash",
+          "doc_id",
+          "ldu_id",
+          "page_number",
+          "source_path",
+          "text"
+        ],
+        "validation_mode": null,
+        "contact": null,
+        "source": "lineage"
+      },
+      {
+        "id": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40",
+        "subscriber_team": null,
+        "fields_consumed": [
+          "doc_id",
+          "extracted_facts",
+          "entities",
+          "extraction_model"
+        ],
+        "breaking_fields": [
+          "confidence",
+          "content_hash",
+          "doc_id",
+          "ldu_id",
+          "page_number",
+          "source_path",
+          "text"
+        ],
+        "validation_mode": null,
+        "contact": null,
+        "source": "lineage"
+      },
+      {
+        "id": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69",
+        "subscriber_team": null,
+        "fields_consumed": [
+          "doc_id",
+          "extracted_facts",
+          "entities",
+          "extraction_model"
+        ],
+        "breaking_fields": [
+          "confidence",
+          "content_hash",
+          "doc_id",
+          "ldu_id",
+          "page_number",
+          "source_path",
+          "text"
+        ],
+        "validation_mode": null,
+        "contact": null,
+        "source": "lineage"
+      },
+      {
+        "id": "py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82",
+        "subscriber_team": null,
+        "fields_consumed": [
+          "doc_id",
+          "extracted_facts",
+          "entities",
+          "extraction_model"
+        ],
+        "breaking_fields": [
+          "confidence",
+          "content_hash",
+          "doc_id",
+          "ldu_id",
+          "page_number",
+          "source_path",
+          "text"
+        ],
+        "validation_mode": null,
+        "contact": null,
+        "source": "lineage"
+      }
+    ]
+  },
+  "migration_checklist": [
+    "Review the previous and latest snapshots for contract week3-document-refinery-extractions and confirm each changed field before rollout.",
+    "Notify subscriber week4-cartographer (week4-team@org.com) and confirm validation mode ENFORCE before deployment.",
+    "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::20 before deployment.",
+    "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::40 before deployment.",
+    "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::69 before deployment.",
+    "Notify subscriber py::../../week3/document-intelligence-refinery/src/adapters/fact_table_store.py::call::82 before deployment.",
+    "Run ValidationRunner on a clean baseline after migration.",
+    "Regenerate contracts and schema snapshots after migration completes."
+  ],
+  "rollback_plan": [
+    "Restore the previous snapshot-backed contract for week3-document-refinery-extractions using 20260404_074807.yaml as the rollback target.",
+    "Revert the producer-side code change that introduced the incompatible schema diff.",
+    "Re-run validation against the restored dataset and confirm critical failures clear."
+  ],
+  "breaking_fields": []
+}
